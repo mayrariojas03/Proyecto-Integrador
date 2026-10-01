@@ -7,6 +7,10 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.repository.RegisterResult
+import com.example.data.repository.SmartChiclayoRepository
+import kotlinx.coroutines.launch
 import com.example.models.AuthProvider
 import com.example.models.DriverProfile
 import com.example.models.DriverStatus
@@ -47,7 +51,9 @@ enum class AppScreen {
     DRIVER_PORTAL
 }
 
-class SmartChiclayoViewModel : ViewModel() {
+class SmartChiclayoViewModel(
+    val repository: SmartChiclayoRepository? = null
+) : ViewModel() {
 
     // Current navigation state
     var currentScreen by mutableStateOf(AppScreen.WELCOME)
@@ -177,23 +183,29 @@ class SmartChiclayoViewModel : ViewModel() {
 
     // Auth actions
     fun handleGoogleAuth(onUserNotFound: () -> Unit, onUserFound: () -> Unit) {
-        // Look for Google registered user in registeredUsers
-        val existing = registeredUsers.firstOrNull { it.authProvider == AuthProvider.GOOGLE || it.correo == "mayrariojas03@gmail.com" }
-        if (existing != null) {
-            currentUser = existing
-            navigateTo(AppScreen.LOADING)
-            onUserFound()
-        } else {
-            // No user registered yet, prefill and go to register
-            registerPrefillNombres = "Mayra"
-            registerPrefillApellidos = "Riojas"
-            registerPrefillCorreo = "mayrariojas03@gmail.com"
-            registerAuthProvider = AuthProvider.GOOGLE
-            onUserNotFound()
-            navigateTo(AppScreen.REGISTER)
+        viewModelScope.launch {
+            val email = "mayrariojas03@gmail.com"
+            val dbUser = repository?.findUserByEmail(email)
+            val memoryUser = registeredUsers.firstOrNull { it.authProvider == AuthProvider.GOOGLE || it.correo.equals(email, ignoreCase = true) }
+            val existing = dbUser ?: memoryUser
+
+            if (existing != null) {
+                currentUser = existing
+                walletBalance = 0.00
+                tripHistory.clear()
+                transactions.clear()
+                navigateTo(AppScreen.LOADING)
+                onUserFound()
+            } else {
+                registerPrefillNombres = "Mayra"
+                registerPrefillApellidos = "Riojas"
+                registerPrefillCorreo = email
+                registerAuthProvider = AuthProvider.GOOGLE
+                onUserNotFound()
+                navigateTo(AppScreen.REGISTER)
+            }
         }
     }
-
 
     fun requestPhoneOtp(phone: String) {
         pendingPhoneNumber = phone
@@ -203,16 +215,27 @@ class SmartChiclayoViewModel : ViewModel() {
     fun verifyPhoneOtp(code: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         if (code == "123456" || code.length >= 4) {
             showOtpDialog = false
-            val existing = registeredUsers.firstOrNull { it.telefono == pendingPhoneNumber }
-            if (existing != null) {
-                currentUser = existing
-                navigateTo(AppScreen.LOADING)
-            } else {
-                registerPrefillTelefono = pendingPhoneNumber
-                registerAuthProvider = AuthProvider.PHONE
-                navigateTo(AppScreen.REGISTER)
+            viewModelScope.launch {
+                val dbUser = repository?.findUserByPhone(pendingPhoneNumber)
+                val cleanPending = pendingPhoneNumber.replace(" ", "").replace("+51", "").trim()
+                val memoryUser = registeredUsers.firstOrNull { 
+                    it.telefono.replace(" ", "").replace("+51", "") == cleanPending 
+                }
+                val existing = dbUser ?: memoryUser
+
+                if (existing != null) {
+                    currentUser = existing
+                    walletBalance = 0.00
+                    tripHistory.clear()
+                    transactions.clear()
+                    navigateTo(AppScreen.LOADING)
+                } else {
+                    registerPrefillTelefono = cleanPending.ifBlank { pendingPhoneNumber }
+                    registerAuthProvider = AuthProvider.PHONE
+                    navigateTo(AppScreen.REGISTER)
+                }
+                onSuccess()
             }
-            onSuccess()
         } else {
             otpErrorMsg = "Código incorrecto. Prueba con 123456"
             onError("Código inválido")
@@ -225,38 +248,74 @@ class SmartChiclayoViewModel : ViewModel() {
         dni: String,
         telefono: String,
         correo: String,
-        fechaNacimiento: String
-    ): Boolean {
-        // Validation check
-        val dniExists = registeredUsers.any { it.dni == dni }
-        val phoneExists = registeredUsers.any { it.telefono == telefono }
-        val emailExists = registeredUsers.any { it.correo.equals(correo, ignoreCase = true) }
+        fechaNacimiento: String,
+        onResult: (String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            if (repository != null) {
+                when (val result = repository.registerUser(
+                    nombres = nombres,
+                    apellidos = apellidos,
+                    dni = dni,
+                    telefono = telefono,
+                    correo = correo,
+                    fechaNacimiento = fechaNacimiento,
+                    authProvider = registerAuthProvider
+                )) {
+                    is RegisterResult.Success -> {
+                        registeredUsers.add(result.user)
+                        currentUser = result.user
+                        walletBalance = 0.00
+                        tripHistory.clear()
+                        transactions.clear()
+                        navigateTo(AppScreen.LOADING)
+                        onResult(null)
+                    }
+                    is RegisterResult.Error -> {
+                        onResult(result.message)
+                    }
+                }
+            } else {
+                val dniExists = registeredUsers.any { it.dni == dni }
+                val phoneExists = registeredUsers.any { it.telefono == telefono }
+                val emailExists = registeredUsers.any { it.correo.equals(correo, ignoreCase = true) }
 
-        if (dniExists || phoneExists || emailExists) {
-            return false
+                if (dniExists) {
+                    onResult("El número de documento ya está registrado.")
+                    return@launch
+                }
+                if (phoneExists) {
+                    onResult("El teléfono ya está registrado.")
+                    return@launch
+                }
+                if (emailExists) {
+                    onResult("El correo ya está registrado.")
+                    return@launch
+                }
+
+                val newUser = User(
+                    id = "USR-${System.currentTimeMillis() % 10000}",
+                    nombres = nombres,
+                    apellidos = apellidos,
+                    dni = dni,
+                    telefono = telefono,
+                    correo = correo,
+                    fechaNacimiento = fechaNacimiento,
+                    rol = UserRole.PASAJERO,
+                    calificacion = 0.0,
+                    totalViajes = 0,
+                    esVip = false,
+                    authProvider = registerAuthProvider
+                )
+                registeredUsers.add(newUser)
+                currentUser = newUser
+                walletBalance = 0.00
+                tripHistory.clear()
+                transactions.clear()
+                navigateTo(AppScreen.LOADING)
+                onResult(null)
+            }
         }
-
-        val newUser = User(
-            id = "USR-${System.currentTimeMillis() % 10000}",
-            nombres = nombres,
-            apellidos = apellidos,
-            dni = dni,
-            telefono = telefono,
-            correo = correo,
-            fechaNacimiento = fechaNacimiento,
-            rol = UserRole.PASAJERO,
-            calificacion = 0.0,
-            totalViajes = 0,
-            esVip = false,
-            authProvider = registerAuthProvider
-        )
-        registeredUsers.add(newUser)
-        currentUser = newUser
-        walletBalance = 0.00
-        tripHistory.clear()
-        transactions.clear()
-        navigateTo(AppScreen.LOADING)
-        return true
     }
 
     fun logout() {
@@ -299,10 +358,13 @@ class SmartChiclayoViewModel : ViewModel() {
             calificacionConductor = 4.9
         )
         activeTrip = newTrip
-        // Add to trip history so user can see it
         tripHistory.add(0, newTrip)
         currentUser?.let { user ->
             currentUser = user.copy(totalViajes = user.totalViajes + 1)
+            viewModelScope.launch {
+                val uId = user.id.toLongOrNull() ?: 1L
+                repository?.saveTrip(newTrip, uId)
+            }
         }
     }
 

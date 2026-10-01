@@ -40,6 +40,8 @@ import com.example.modules.profile.ProfileScreen
 import com.example.modules.security.SecurityScreen
 import com.example.modules.settings.SettingsScreen
 import com.example.modules.support.SupportScreen
+import com.example.data.local.AppDatabase
+import com.example.data.repository.SmartChiclayoRepository
 import com.example.state.AppScreen
 import com.example.state.SmartChiclayoViewModel
 import com.example.ui.theme.SmartChiclayoTheme
@@ -49,8 +51,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val database = AppDatabase.getInstance(applicationContext)
+        val repository = SmartChiclayoRepository(database.usuarioDao(), database.viajeDao())
+        val appViewModel = SmartChiclayoViewModel(repository)
         setContent {
-            val appViewModel: SmartChiclayoViewModel = viewModel()
             SmartChiclayoApp(viewModel = appViewModel)
         }
     }
@@ -193,14 +197,15 @@ fun AppScreenRouter(
                     initialTelefono = viewModel.registerPrefillTelefono,
                     authProvider = viewModel.registerAuthProvider,
                     onBackClick = { viewModel.navigateBack() },
-                    onRegisterSuccess = { nombres, apellidos, dni, telefono, correo, fechaNacimiento ->
+                    onRegisterSuccess = { nombres, apellidos, dni, telefono, correo, fechaNacimiento, onResult ->
                         viewModel.registerNewUser(
                             nombres = nombres,
                             apellidos = apellidos,
                             dni = dni,
                             telefono = telefono,
                             correo = correo,
-                            fechaNacimiento = fechaNacimiento
+                            fechaNacimiento = fechaNacimiento,
+                            onResult = onResult
                         )
                     }
                 )

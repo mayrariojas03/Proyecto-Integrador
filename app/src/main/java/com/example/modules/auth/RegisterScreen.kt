@@ -75,8 +75,9 @@ fun RegisterScreen(
         dni: String,
         telefono: String,
         correo: String,
-        fechaNacimiento: String
-    ) -> Boolean,
+        fechaNacimiento: String,
+        onResult: (String?) -> Unit
+    ) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var nombres by remember { mutableStateOf(initialNombres) }
@@ -443,16 +444,17 @@ fun RegisterScreen(
                             return@Button
                         }
 
-                        val success = onRegisterSuccess(
+                        onRegisterSuccess(
                             nombres.trim(),
                             apellidos.trim(),
                             dni.trim(),
                             telefono.trim(),
                             correo.trim(),
                             fechaNacimiento.trim()
-                        )
-                        if (!success) {
-                            errorMessage = "El DNI, teléfono o correo ya se encuentra registrado."
+                        ) { error ->
+                            if (error != null) {
+                                errorMessage = error
+                            }
                         }
                     },
                     modifier = Modifier
