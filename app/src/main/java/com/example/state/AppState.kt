@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.repository.AuthLoginResult
 import com.example.data.repository.RegisterResult
 import com.example.data.repository.SmartChiclayoRepository
 import kotlinx.coroutines.launch
@@ -29,6 +30,11 @@ import com.example.models.TripType
 import com.example.models.User
 import com.example.models.UserRole
 import com.example.ui.theme.AppThemeMode
+
+enum class AuthTab {
+    LOGIN,
+    REGISTER
+}
 
 enum class AppScreen {
     WELCOME,
@@ -62,6 +68,9 @@ class SmartChiclayoViewModel(
     // Theme state (Claro, Oscuro, Rosa pastel, Verde pastel, Azul pastel)
     var currentTheme by mutableStateOf(AppThemeMode.OSCURO)
     var showThemeDialog by mutableStateOf(false)
+
+    // Auth Tab state (LOGIN or REGISTER)
+    var authCurrentTab by mutableStateOf(AuthTab.LOGIN)
 
     // User accounts state - As requested: NO ACCOUNTS PRE-REGISTERED INITIALLY
     val registeredUsers = mutableStateListOf<User>()
@@ -114,27 +123,8 @@ class SmartChiclayoViewModel(
         )
     )
 
-    // Notifications
-    val notificationsList = mutableStateListOf(
-        NotificationItem(
-            id = "NOTIF-1",
-            categoria = NotificationCategory.VIAJES,
-            titulo = "Viaje completado con éxito",
-            mensaje = "Tu viaje hacia Plaza de Armas culminó por S/ 14.50. ¡Gracias por viajar con Smart Chiclayo!",
-            fecha = "Hoy",
-            hora = "14:55",
-            leida = false
-        ),
-        NotificationItem(
-            id = "NOTIF-2",
-            categoria = NotificationCategory.SEGURIDAD,
-            titulo = "Monitoreo SOS Activo",
-            mensaje = "Tus contactos de confianza pueden recibir tu ruta en tiempo real ante cualquier emergencia.",
-            fecha = "Ayer",
-            hora = "09:30",
-            leida = false
-        )
-    )
+    // Notifications - STRICTLY 0 for new users as requested
+    val notificationsList = mutableStateListOf<NotificationItem>()
 
     // Driver mode state
     var driverProfile by mutableStateOf<DriverProfile?>(null)
@@ -242,6 +232,77 @@ class SmartChiclayoViewModel(
         }
     }
 
+    fun loginWithGoogleCredentials(email: String, password: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            if (repository != null) {
+                when (val result = repository.loginWithEmail(email, password)) {
+                    is AuthLoginResult.Success -> {
+                        currentUser = result.user
+                        walletBalance = 0.00
+                        tripHistory.clear()
+                        transactions.clear()
+                        notificationsList.clear()
+                        navigateTo(AppScreen.LOADING)
+                        onResult(null)
+                    }
+                    is AuthLoginResult.Error -> {
+                        onResult(result.message)
+                    }
+                }
+            } else {
+                val found = registeredUsers.firstOrNull { it.correo.equals(email.trim(), ignoreCase = true) }
+                if (found != null) {
+                    currentUser = found
+                    walletBalance = 0.00
+                    tripHistory.clear()
+                    transactions.clear()
+                    notificationsList.clear()
+                    navigateTo(AppScreen.LOADING)
+                    onResult(null)
+                } else {
+                    onResult("No se encontró una cuenta con este correo electrónico.")
+                }
+            }
+        }
+    }
+
+    fun loginWithPhoneCredentials(phone: String, password: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            if (repository != null) {
+                when (val result = repository.loginWithPhone(phone, password)) {
+                    is AuthLoginResult.Success -> {
+                        currentUser = result.user
+                        walletBalance = 0.00
+                        tripHistory.clear()
+                        transactions.clear()
+                        notificationsList.clear()
+                        navigateTo(AppScreen.LOADING)
+                        onResult(null)
+                    }
+                    is AuthLoginResult.Error -> {
+                        onResult(result.message)
+                    }
+                }
+            } else {
+                val clean = phone.replace(" ", "").replace("+51", "").trim()
+                val found = registeredUsers.firstOrNull { 
+                    it.telefono.replace(" ", "").replace("+51", "").trim() == clean 
+                }
+                if (found != null) {
+                    currentUser = found
+                    walletBalance = 0.00
+                    tripHistory.clear()
+                    transactions.clear()
+                    notificationsList.clear()
+                    navigateTo(AppScreen.LOADING)
+                    onResult(null)
+                } else {
+                    onResult("No se encontró una cuenta con este número de celular.")
+                }
+            }
+        }
+    }
+
     fun registerNewUser(
         nombres: String,
         apellidos: String,
@@ -249,6 +310,7 @@ class SmartChiclayoViewModel(
         telefono: String,
         correo: String,
         fechaNacimiento: String,
+        password: String = "",
         onResult: (String?) -> Unit
     ) {
         viewModelScope.launch {
@@ -260,6 +322,7 @@ class SmartChiclayoViewModel(
                     telefono = telefono,
                     correo = correo,
                     fechaNacimiento = fechaNacimiento,
+                    password = password,
                     authProvider = registerAuthProvider
                 )) {
                     is RegisterResult.Success -> {
@@ -268,6 +331,7 @@ class SmartChiclayoViewModel(
                         walletBalance = 0.00
                         tripHistory.clear()
                         transactions.clear()
+                        notificationsList.clear()
                         navigateTo(AppScreen.LOADING)
                         onResult(null)
                     }
@@ -312,6 +376,7 @@ class SmartChiclayoViewModel(
                 walletBalance = 0.00
                 tripHistory.clear()
                 transactions.clear()
+                notificationsList.clear()
                 navigateTo(AppScreen.LOADING)
                 onResult(null)
             }
@@ -323,6 +388,7 @@ class SmartChiclayoViewModel(
         walletBalance = 0.00
         tripHistory.clear()
         transactions.clear()
+        notificationsList.clear()
         currentScreen = AppScreen.WELCOME
         screenStack.clear()
         screenStack.add(AppScreen.WELCOME)

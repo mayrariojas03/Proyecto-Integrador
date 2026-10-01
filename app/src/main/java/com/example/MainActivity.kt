@@ -21,6 +21,7 @@ import com.example.components.ThemeSelectionDialog
 import com.example.models.AuthProvider
 import com.example.models.DriverProfile
 import com.example.models.UserRole
+import com.example.modules.auth.AuthScreen
 import com.example.modules.auth.LoadingScreen
 import com.example.modules.auth.LoginScreen
 import com.example.modules.auth.OtpVerificationDialog
@@ -43,6 +44,7 @@ import com.example.modules.support.SupportScreen
 import com.example.data.local.AppDatabase
 import com.example.data.repository.SmartChiclayoRepository
 import com.example.state.AppScreen
+import com.example.state.AuthTab
 import com.example.state.SmartChiclayoViewModel
 import com.example.ui.theme.SmartChiclayoTheme
 import kotlinx.coroutines.launch
@@ -167,47 +169,51 @@ fun AppScreenRouter(
         when (viewModel.currentScreen) {
             AppScreen.WELCOME -> {
                 WelcomeScreen(
-                    onOrderTaxiClick = { viewModel.navigateTo(AppScreen.LOGIN) },
-                    onLoginClick = { viewModel.navigateTo(AppScreen.LOGIN) }
+                    onOrderTaxiClick = {
+                        viewModel.authCurrentTab = AuthTab.REGISTER
+                        viewModel.navigateTo(AppScreen.LOGIN)
+                    },
+                    onLoginClick = {
+                        viewModel.authCurrentTab = AuthTab.LOGIN
+                        viewModel.navigateTo(AppScreen.LOGIN)
+                    }
                 )
             }
 
-            AppScreen.LOGIN -> {
-                LoginScreen(
-                    onGoogleLoginClick = {
-                        viewModel.handleGoogleAuth(
-                            onUserNotFound = { /* redirected to register with prefill */ },
-                            onUserFound = { /* logs in */ }
-                        )
+            AppScreen.LOGIN, AppScreen.REGISTER -> {
+                AuthScreen(
+                    currentTab = viewModel.authCurrentTab,
+                    onTabChange = { newTab -> viewModel.authCurrentTab = newTab },
+                    onLoginWithGoogle = { email, password, onResult ->
+                        viewModel.loginWithGoogleCredentials(email, password, onResult)
                     },
-                    onSendPhoneCodeClick = { phone ->
+                    onLoginWithPhone = { phone, password, onResult ->
+                        viewModel.loginWithPhoneCredentials(phone, password, onResult)
+                    },
+                    onRequestPhoneOtp = { phone ->
                         viewModel.requestPhoneOtp(phone)
                     },
-                    onHelpClick = { viewModel.navigateTo(AppScreen.SUPPORT) },
-                    onTermsClick = { viewModel.navigateTo(AppScreen.SETTINGS) },
-                    onPrivacyClick = { viewModel.navigateTo(AppScreen.SETTINGS) }
-                )
-            }
-
-            AppScreen.REGISTER -> {
-                RegisterScreen(
-                    initialNombres = viewModel.registerPrefillNombres,
-                    initialApellidos = viewModel.registerPrefillApellidos,
-                    initialCorreo = viewModel.registerPrefillCorreo,
-                    initialTelefono = viewModel.registerPrefillTelefono,
-                    authProvider = viewModel.registerAuthProvider,
-                    onBackClick = { viewModel.navigateBack() },
-                    onRegisterSuccess = { nombres, apellidos, dni, telefono, correo, fechaNacimiento, onResult ->
+                    onRegisterSubmit = { nombres, apellidos, dni, telefono, correo, fechaNac, password, onResult ->
                         viewModel.registerNewUser(
                             nombres = nombres,
                             apellidos = apellidos,
                             dni = dni,
                             telefono = telefono,
                             correo = correo,
-                            fechaNacimiento = fechaNacimiento,
+                            fechaNacimiento = fechaNac,
+                            password = password,
                             onResult = onResult
                         )
-                    }
+                    },
+                    onBackClick = {
+                        val handled = viewModel.navigateBack()
+                        if (!handled) {
+                            viewModel.navigateTo(AppScreen.WELCOME)
+                        }
+                    },
+                    onHelpClick = { viewModel.navigateTo(AppScreen.SUPPORT) },
+                    onTermsClick = { viewModel.navigateTo(AppScreen.SETTINGS) },
+                    onPrivacyClick = { viewModel.navigateTo(AppScreen.SETTINGS) }
                 )
             }
 

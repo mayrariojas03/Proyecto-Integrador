@@ -107,17 +107,19 @@ fun NotificationsScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Centro de avisos y novedades",
+                        text = if (notifications.isEmpty()) "0 notificaciones" else "${notifications.size} notificaciones",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                TextButton(
-                    onClick = onMarkAllAsRead,
-                    modifier = Modifier.testTag("mark_all_read_button")
-                ) {
-                    Text("Marcar leídas", fontSize = 12.sp, color = GoldPrimary)
+                if (notifications.isNotEmpty()) {
+                    TextButton(
+                        onClick = onMarkAllAsRead,
+                        modifier = Modifier.testTag("mark_all_read_button")
+                    ) {
+                        Text("Marcar leídas", fontSize = 12.sp, color = GoldPrimary)
+                    }
                 }
             }
 
@@ -137,7 +139,7 @@ fun NotificationsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Todas",
+                        text = "Todas (0)",
                         fontSize = 11.5.sp,
                         fontWeight = if (selectedCategoryFilter == null) FontWeight.Bold else FontWeight.Normal,
                         color = if (selectedCategoryFilter == null) Color.Black else MaterialTheme.colorScheme.onSurface
@@ -175,24 +177,54 @@ fun NotificationsScreen(
             ) {
                 if (filtered.isEmpty()) {
                     item {
-                        Box(
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 40.dp),
-                            contentAlignment = Alignment.Center
+                                .padding(vertical = 24.dp)
+                                .testTag("empty_notifications_view"),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            )
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(CircleShape)
+                                        .background(GoldPrimary.copy(alpha = 0.12f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Notifications,
+                                        contentDescription = null,
+                                        tint = GoldPrimary,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
                                 Text(
-                                    text = "No tienes notificaciones pendientes",
+                                    text = "0 notificaciones",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Como usuario nuevo, no tienes notificaciones pendientes. Aquí recibirás avisos de tus viajes, alertas de seguridad y promociones de Smart Chiclayo.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 14.sp
+                                    fontSize = 13.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    lineHeight = 18.sp
                                 )
                             }
                         }
