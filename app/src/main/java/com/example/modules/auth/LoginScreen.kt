@@ -16,27 +16,38 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -47,13 +58,16 @@ import com.example.ui.theme.GoldPrimary
 @Composable
 fun LoginScreen(
     onGoogleLoginClick: () -> Unit,
-    onFacebookLoginClick: () -> Unit,
-    onPhoneLoginClick: () -> Unit,
+    onSendPhoneCodeClick: (String) -> Unit,
     onHelpClick: () -> Unit,
     onTermsClick: () -> Unit,
     onPrivacyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var phoneNumberInput by remember { mutableStateOf("") }
+    var phoneError by remember { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = Color(0xFF0D0E11)
@@ -63,11 +77,12 @@ fun LoginScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp)
+                .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Bar with Ayuda button (as shown in PDF Page 3)
+            // Top Bar with Ayuda button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
@@ -99,7 +114,9 @@ fun LoginScreen(
                 }
             }
 
-            // Middle Section: Emblem, Tag and Main Copy (Matching PDF Page 3)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Middle Section: Emblem, Tag and Main Copy
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
@@ -107,7 +124,7 @@ fun LoginScreen(
                 // Central Glowing Emblem
                 Box(
                     modifier = Modifier
-                        .size(110.dp)
+                        .size(96.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF181A22))
                         .border(2.dp, GoldPrimary, CircleShape),
@@ -115,7 +132,7 @@ fun LoginScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(76.dp)
+                            .size(66.dp)
                             .clip(CircleShape)
                             .background(Color(0xFF261E0A))
                             .border(1.5.dp, GoldAccent, CircleShape),
@@ -125,14 +142,14 @@ fun LoginScreen(
                             imageVector = Icons.Default.Shield,
                             contentDescription = null,
                             tint = GoldPrimary,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Pill Tag: "ELECCIÓN SEGURA" (ordered and distinct as requested)
+                // Pill Tag: "ELECCIÓN SEGURA"
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
@@ -158,29 +175,31 @@ fun LoginScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "Haz tu elección. Justa y\nsegura",
                     color = Color.White,
-                    fontSize = 24.sp,
+                    fontSize = 23.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    lineHeight = 28.sp
+                    lineHeight = 27.sp
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = "Define tus condiciones y viaja con total\nconfianza en Chiclayo. Conductores 100%\nverificados.",
                     color = Color(0xFFA0A3B1),
-                    fontSize = 13.sp,
+                    fontSize = 12.5.sp,
                     textAlign = TextAlign.Center,
-                    lineHeight = 18.sp
+                    lineHeight = 17.sp
                 )
             }
 
-            // Bottom Section: Social and Phone Login Buttons + Legal
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Bottom Section: Google + Phone Auth (Facebook completely removed)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
@@ -190,9 +209,9 @@ fun LoginScreen(
                     onClick = onGoogleLoginClick,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .height(50.dp)
                         .testTag("login_with_google_button"),
-                    shape = RoundedCornerShape(26.dp),
+                    shape = RoundedCornerShape(25.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
@@ -202,7 +221,6 @@ fun LoginScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        // Google "G" letter emblem
                         Text(
                             text = "G",
                             fontWeight = FontWeight.Black,
@@ -219,77 +237,135 @@ fun LoginScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Button 2: Continuar con Facebook
-                Button(
-                    onClick = onFacebookLoginClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .testTag("login_with_facebook_button"),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1877F2),
-                        contentColor = Color.White
-                    )
+                // Divider: "O con tu número de teléfono"
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFF2C2F3C))
+                    Text(
+                        text = "  O ingresa con tu teléfono  ",
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF888B98),
+                        fontWeight = FontWeight.Medium
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFF2C2F3C))
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Phone Input and "Enviar código" option
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C2F3C))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = "f",
-                            fontWeight = FontWeight.Black,
-                            fontSize = 20.sp,
-                            color = Color.White
+                            text = "Número celular (Perú)",
+                            fontSize = 11.sp,
+                            color = Color(0xFFA0A3B1),
+                            fontWeight = FontWeight.Medium
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Continuar con Facebook",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.5.sp
-                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // Country Code Chip
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF232631))
+                                    .padding(horizontal = 10.dp, vertical = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "🇵🇪 +51",
+                                    color = Color.White,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            OutlinedTextField(
+                                value = phoneNumberInput,
+                                onValueChange = {
+                                    if (it.length <= 9) {
+                                        phoneNumberInput = it
+                                        phoneError = null
+                                    }
+                                },
+                                placeholder = { Text("974 123 456", color = Color(0xFF6B7280)) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("input_phone_login"),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPrimary,
+                                    unfocusedBorderColor = Color(0xFF2C2F3C),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+                        }
+
+                        if (phoneError != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = phoneError!!,
+                                color = Color(0xFFEF4444),
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Button: "Enviar código"
+                        Button(
+                            onClick = {
+                                val clean = phoneNumberInput.trim()
+                                if (clean.length == 9) {
+                                    onSendPhoneCodeClick("+51 $clean")
+                                } else {
+                                    phoneError = "Ingresa tu número de 9 dígitos para enviar el código."
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("send_phone_code_button"),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = GoldPrimary,
+                                contentColor = Color.Black
+                            )
+                        ) {
+                            Text(
+                                text = "Enviar código de verificación",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Button 3: Continuar con el teléfono
-                OutlinedButton(
-                    onClick = onPhoneLoginClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .testTag("login_with_phone_button"),
-                    shape = RoundedCornerShape(26.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF374151)),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color.White
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhoneAndroid,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Continuar con el teléfono",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.5.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Legal Disclaimer
                 Text(

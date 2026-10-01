@@ -176,14 +176,8 @@ fun AppScreenRouter(
                             onUserFound = { /* logs in */ }
                         )
                     },
-                    onFacebookLoginClick = {
-                        viewModel.handleFacebookAuth(
-                            onUserNotFound = {},
-                            onUserFound = {}
-                        )
-                    },
-                    onPhoneLoginClick = {
-                        viewModel.requestPhoneOtp("+51 974 123 456")
+                    onSendPhoneCodeClick = { phone ->
+                        viewModel.requestPhoneOtp(phone)
                     },
                     onHelpClick = { viewModel.navigateTo(AppScreen.SUPPORT) },
                     onTermsClick = { viewModel.navigateTo(AppScreen.SETTINGS) },
@@ -251,7 +245,8 @@ fun AppScreenRouter(
             AppScreen.PROFILE -> {
                 ProfileScreen(
                     currentUser = viewModel.currentUser,
-                    onBackClick = { viewModel.navigateTo(AppScreen.HOME) }
+                    onBackClick = { viewModel.navigateTo(AppScreen.HOME) },
+                    onLogoutClick = { viewModel.logout() }
                 )
             }
 

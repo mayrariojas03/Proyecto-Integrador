@@ -142,26 +142,29 @@ fun SideMenuDrawer(
                                 fontSize = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            // VIP Badge
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(GoldPrimary.copy(alpha = 0.2f))
-                                    .border(1.dp, GoldPrimary.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "VIP",
-                                    color = GoldPrimary,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            if (currentUser?.esVip == true) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(GoldPrimary.copy(alpha = 0.2f))
+                                        .border(1.dp, GoldPrimary.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "VIP",
+                                        color = GoldPrimary,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(2.dp))
+                        val rating = currentUser?.calificacion ?: 0.0
+                        val viajes = currentUser?.totalViajes ?: 0
                         Text(
-                            text = "★ 4.96 (${currentUser?.totalViajes ?: 24} viajes)",
+                            text = if (viajes == 0) "★ 0.0 (0 viajes)" else "★ ${String.format("%.1f", rating)} ($viajes viajes)",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -353,7 +356,7 @@ fun SideMenuDrawer(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Footer: Centered Social Icons (Facebook & Instagram) - removed version text as requested in Page 6
+            // Footer: Chiclayo City branding
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -363,34 +366,15 @@ fun SideMenuDrawer(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { /* Facebook */ },
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "f",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { /* Instagram */ },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "IG",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                        text = "Smart Chiclayo • Lambayeque",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

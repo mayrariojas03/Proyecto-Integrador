@@ -22,9 +22,9 @@ data class User(
     val correo: String,
     val fechaNacimiento: String = "",
     val rol: UserRole = UserRole.PASAJERO,
-    val calificacion: Double = 4.96,
-    val totalViajes: Int = 24,
-    val esVip: Boolean = true,
+    val calificacion: Double = 0.0,
+    val totalViajes: Int = 0,
+    val esVip: Boolean = false,
     val authProvider: AuthProvider = AuthProvider.GOOGLE,
     val photoUrl: String? = null
 ) {

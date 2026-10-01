@@ -85,118 +85,13 @@ class SmartChiclayoViewModel : ViewModel() {
     var otpCodeInput by mutableStateOf("")
     var otpErrorMsg by mutableStateOf<String?>(null)
 
-    // Wallet balance
-    var walletBalance by mutableDoubleStateOf(45.00)
+    // Wallet balance - Initialized to 0.00 for new users
+    var walletBalance by mutableDoubleStateOf(0.00)
     var preferredPaymentType by mutableStateOf(PaymentType.SMARTPAY)
-    val transactions = mutableStateListOf(
-        PaymentTransaction("TX-9901", "Viaje Taxi Smart Balta - Mall", "Hoy", "14:40", 14.50, PaymentType.SMARTPAY),
-        PaymentTransaction("TX-9844", "Recarga Saldo SmartPay", "Ayer", "19:10", 50.00, PaymentType.YAPE),
-        PaymentTransaction("TX-9721", "Viaje Colectivo Pimentel", "19 Oct", "09:30", 25.00, PaymentType.SMARTPAY)
-    )
+    val transactions = mutableStateListOf<PaymentTransaction>()
 
-    // Trip history list
-    val tripHistory = mutableStateListOf(
-        Trip(
-            id = "TRIP-001",
-            codigoViaje = "CHIC-2024-8841",
-            tipoServicio = TripType.TAXI_SMART,
-            origen = "Hospital Regional de Lambayeque",
-            origenDetalle = "Av. El Progreso",
-            destino = "Plaza de Armas de Chiclayo",
-            destinoDetalle = "San José",
-            fecha = "Hoy",
-            hora = "14:35",
-            precio = 14.50,
-            distanciaKm = 4.8,
-            duracionMin = 18,
-            metodoPago = "SmartPay",
-            estado = TripStatus.COMPLETADO,
-            nombreConductor = "Carlos Mendoza Q.",
-            vehiculoConductor = "Toyota Yaris • Blanco",
-            placaConductor = "M3B-120",
-            calificacionConductor = 4.9
-        ),
-        Trip(
-            id = "TRIP-002",
-            codigoViaje = "CHIC-2024-8812",
-            tipoServicio = TripType.TAXI_SMART,
-            origen = "Mall Aventura Chiclayo",
-            origenDetalle = "Panamericana Nte",
-            destino = "Av. Santa Victoria 789",
-            destinoDetalle = "Chiclayo Urbano",
-            fecha = "Ayer",
-            hora = "20:15",
-            precio = 9.00,
-            distanciaKm = 3.2,
-            duracionMin = 12,
-            metodoPago = "Efectivo",
-            estado = TripStatus.COMPLETADO,
-            nombreConductor = "Jorge Valdiviezo",
-            vehiculoConductor = "Hyundai Accent • Plata",
-            placaConductor = "M4X-901",
-            calificacionConductor = 4.8
-        ),
-        Trip(
-            id = "TRIP-003",
-            codigoViaje = "CHIC-2024-8799",
-            tipoServicio = TripType.ENVIO_EXPRESS,
-            origen = "Real Plaza Chiclayo",
-            origenDetalle = "Av. Bolognesi",
-            destino = "Casa Blanca Suite",
-            destinoDetalle = "Ampliación Saúl Cantoral",
-            fecha = "22 Oct",
-            hora = "11:20",
-            precio = 12.00,
-            distanciaKm = 5.1,
-            duracionMin = 16,
-            metodoPago = "Tarjeta",
-            estado = TripStatus.COMPLETADO,
-            nombreConductor = "Miguel Santisteban",
-            vehiculoConductor = "Honda Wave • Moto",
-            placaConductor = "T1W-445",
-            calificacionConductor = 5.0
-        ),
-        Trip(
-            id = "TRIP-004",
-            codigoViaje = "CHIC-2024-8750",
-            tipoServicio = TripType.CHICLAYO_A_CIUDADES,
-            origen = "Av. Salaverry 1774",
-            origenDetalle = "Chiclayo",
-            destino = "Malecón de Pimentel",
-            destinoDetalle = "Lambayeque Costa",
-            fecha = "19 Oct",
-            hora = "09:10",
-            precio = 25.00,
-            distanciaKm = 14.2,
-            duracionMin = 28,
-            metodoPago = "SmartPay",
-            estado = TripStatus.COMPLETADO,
-            nombreConductor = "Carlos Mendoza Q.",
-            vehiculoConductor = "Toyota Avanza • Gris",
-            placaConductor = "M3B-120",
-            calificacionConductor = 4.9
-        ),
-        Trip(
-            id = "TRIP-005",
-            codigoViaje = "CHIC-2024-8690",
-            tipoServicio = TripType.TAXI_SMART,
-            origen = "Universidad Tecnológica del Perú (UTP)",
-            origenDetalle = "Carretera Pimentel",
-            destino = "SUITE HOTEL PIEDRA BLANCA",
-            destinoDetalle = "Av. Gran Chimú",
-            fecha = "15 Oct",
-            hora = "18:40",
-            precio = 8.50,
-            distanciaKm = 2.9,
-            duracionMin = 11,
-            metodoPago = "Yape/Plin",
-            estado = TripStatus.COMPLETADO,
-            nombreConductor = "Jorge Valdiviezo",
-            vehiculoConductor = "Kia Rio • Negro",
-            placaConductor = "M4X-901",
-            calificacionConductor = 4.7
-        )
-    )
+    // Trip history list - Initialized empty for new users
+    val tripHistory = mutableStateListOf<Trip>()
 
     // Incidents state
     val incidentsList = mutableStateListOf(
@@ -299,21 +194,6 @@ class SmartChiclayoViewModel : ViewModel() {
         }
     }
 
-    fun handleFacebookAuth(onUserNotFound: () -> Unit, onUserFound: () -> Unit) {
-        val existing = registeredUsers.firstOrNull { it.authProvider == AuthProvider.FACEBOOK }
-        if (existing != null) {
-            currentUser = existing
-            navigateTo(AppScreen.LOADING)
-            onUserFound()
-        } else {
-            registerPrefillNombres = "Mayra"
-            registerPrefillApellidos = "Riojas"
-            registerPrefillCorreo = "mayra.fb@example.com"
-            registerAuthProvider = AuthProvider.FACEBOOK
-            onUserNotFound()
-            navigateTo(AppScreen.REGISTER)
-        }
-    }
 
     fun requestPhoneOtp(phone: String) {
         pendingPhoneNumber = phone
@@ -365,23 +245,31 @@ class SmartChiclayoViewModel : ViewModel() {
             correo = correo,
             fechaNacimiento = fechaNacimiento,
             rol = UserRole.PASAJERO,
-            calificacion = 5.0,
+            calificacion = 0.0,
             totalViajes = 0,
             esVip = false,
             authProvider = registerAuthProvider
         )
         registeredUsers.add(newUser)
         currentUser = newUser
+        walletBalance = 0.00
+        tripHistory.clear()
+        transactions.clear()
         navigateTo(AppScreen.LOADING)
         return true
     }
 
     fun logout() {
         currentUser = null
+        walletBalance = 0.00
+        tripHistory.clear()
+        transactions.clear()
         currentScreen = AppScreen.WELCOME
         screenStack.clear()
         screenStack.add(AppScreen.WELCOME)
         isDrawerOpen = false
+        activeTrip = null
+        isSearchingDriver = false
     }
 
     fun requestRide(destination: String, offer: Double) {
@@ -392,8 +280,8 @@ class SmartChiclayoViewModel : ViewModel() {
 
     fun confirmDriverAssigned() {
         isSearchingDriver = false
-        activeTrip = Trip(
-            id = "TRIP-NOW",
+        val newTrip = Trip(
+            id = "TRIP-${System.currentTimeMillis() % 10000}",
             codigoViaje = "CHIC-${System.currentTimeMillis() % 10000}",
             tipoServicio = selectedServiceType,
             origen = currentPickupLocation,
@@ -410,6 +298,12 @@ class SmartChiclayoViewModel : ViewModel() {
             placaConductor = "M3B-120",
             calificacionConductor = 4.9
         )
+        activeTrip = newTrip
+        // Add to trip history so user can see it
+        tripHistory.add(0, newTrip)
+        currentUser?.let { user ->
+            currentUser = user.copy(totalViajes = user.totalViajes + 1)
+        }
     }
 
     fun cancelActiveTrip() {

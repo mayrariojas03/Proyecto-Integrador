@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CameraAlt
@@ -65,22 +66,24 @@ import com.example.ui.theme.GoldPrimary
 fun ProfileScreen(
     currentUser: User?,
     onBackClick: () -> Unit,
+    onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val user = currentUser ?: User(
         id = "DEMO-USR",
-        nombres = "Mayra",
-        apellidos = "Riojas",
-        dni = "74123456",
-        telefono = "974 123 456",
-        correo = "mayrariojas03@gmail.com",
-        fechaNacimiento = "15/05/1998",
-        calificacion = 4.96,
-        totalViajes = 24,
-        esVip = true
+        nombres = "Usuario",
+        apellidos = "Smart",
+        dni = "--------",
+        telefono = "974000000",
+        correo = "usuario@smartchiclayo.pe",
+        fechaNacimiento = "--/--/----",
+        calificacion = 0.0,
+        totalViajes = 0,
+        esVip = false
     )
 
     var showEditDialog by remember { mutableStateOf(false) }
+    var showLogoutConfirmDialog by remember { mutableStateOf(false) }
     var editablePhone by remember { mutableStateOf(user.telefono) }
     var editableEmail by remember { mutableStateOf(user.correo) }
 
@@ -140,7 +143,7 @@ fun ProfileScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = user.nombres.firstOrNull()?.uppercase() ?: "M",
+                            text = user.nombres.firstOrNull()?.uppercase() ?: "U",
                             fontWeight = FontWeight.Black,
                             fontSize = 38.sp,
                             color = GoldPrimary
@@ -165,29 +168,31 @@ fun ProfileScreen(
                     }
                 }
 
-                // Name and VIP
+                // Name and status
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = user.nombreCompleto.ifBlank { "Mayra Riojas" },
+                            text = user.nombreCompleto.ifBlank { "Usuario Smart" },
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(GoldPrimary.copy(alpha = 0.2f))
-                                .border(1.dp, GoldPrimary.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "VIP",
-                                color = GoldPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        if (user.esVip) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(GoldPrimary.copy(alpha = 0.2f))
+                                    .border(1.dp, GoldPrimary.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "VIP",
+                                    color = GoldPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
 
@@ -197,7 +202,8 @@ fun ProfileScreen(
                         Icon(Icons.Default.Star, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "4.96 Calificación • ${user.totalViajes} viajes realizados",
+                            text = if (user.totalViajes == 0) "★ 0.0 Calificación • 0 viajes realizados"
+                            else "★ ${String.format("%.2f", user.calificacion)} Calificación • ${user.totalViajes} viajes realizados",
                             fontSize = 12.5.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -235,7 +241,7 @@ fun ProfileScreen(
                         ProfileInfoRow(
                             icon = Icons.Default.Badge,
                             label = "DNI / Documento",
-                            value = user.dniEnmascarado.ifBlank { "74****12" }
+                            value = user.dniEnmascarado.ifBlank { "--------" }
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -262,7 +268,7 @@ fun ProfileScreen(
                         ProfileInfoRow(
                             icon = Icons.Default.CalendarMonth,
                             label = "Fecha de nacimiento",
-                            value = user.fechaNacimiento.ifBlank { "15/05/1998" }
+                            value = user.fechaNacimiento.ifBlank { "--/--/----" }
                         )
                     }
                 }
@@ -313,9 +319,41 @@ fun ProfileScreen(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // CERRAR SESIÓN BUTTON (Prominent in user profile as requested)
+                Button(
+                    onClick = { showLogoutConfirmDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("profile_logout_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2B1315),
+                        contentColor = Color(0xFFEF4444)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f))
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Logout,
+                        contentDescription = "Cerrar sesión",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Cerrar sesión",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.5.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
 
+        // Edit Dialog
         if (showEditDialog) {
             AlertDialog(
                 onDismissRequest = { showEditDialog = false },
@@ -351,6 +389,34 @@ fun ProfileScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showEditDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
+        // Logout Confirmation Dialog
+        if (showLogoutConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showLogoutConfirmDialog = false },
+                title = { Text("¿Cerrar sesión?", fontWeight = FontWeight.Bold) },
+                text = { Text("¿Estás seguro de que deseas salir de tu cuenta de Smart Chiclayo?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showLogoutConfirmDialog = false
+                            onLogoutClick()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFEF4444),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Sí, cerrar sesión", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogoutConfirmDialog = false }) {
+                        Text("Cancelar")
+                    }
                 }
             )
         }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,16 +28,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AllInclusive
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,7 +43,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,18 +58,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.models.Trip
+import com.example.models.TripStatus
 import com.example.models.TripType
 import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.GoldPrimary
 
 enum class HistoryFilter(val label: String, val icon: ImageVector) {
-    TODAS("Todas", Icons.Default.AllInclusive),
+    TODOS("Todos", Icons.Default.AllInclusive),
     CIUDAD("Viajes en ciudad", Icons.Default.DirectionsCar),
-    ENVIOS("Envío Express", Icons.Default.Inventory2),
-    INTERURBANO("Chiclayo a ciudades", Icons.Default.Public)
+    OTROS("Otros servicios", Icons.Default.LocalShipping)
 }
 
 @Composable
@@ -83,15 +81,22 @@ fun TripHistoryScreen(
     onHelpWithTrip: (Trip) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedFilter by remember { mutableStateOf(HistoryFilter.TODAS) }
+    var selectedFilter by remember { mutableStateOf(HistoryFilter.TODOS) }
     var selectedTripDetail by remember { mutableStateOf<Trip?>(null) }
     var showInvoiceDownloadedToast by remember { mutableStateOf(false) }
 
     val filteredTrips = when (selectedFilter) {
-        HistoryFilter.TODAS -> trips
-        HistoryFilter.CIUDAD -> trips.filter { it.tipoServicio == TripType.TAXI_SMART || it.tipoServicio == TripType.MOTOTAXI || it.tipoServicio == TripType.COLECTIVO }
-        HistoryFilter.ENVIOS -> trips.filter { it.tipoServicio == TripType.ENVIO_EXPRESS }
-        HistoryFilter.INTERURBANO -> trips.filter { it.tipoServicio == TripType.CHICLAYO_A_CIUDADES }
+        HistoryFilter.TODOS -> trips
+        HistoryFilter.CIUDAD -> trips.filter {
+            it.tipoServicio == TripType.TAXI_SMART ||
+                    it.tipoServicio == TripType.MOTOTAXI ||
+                    it.tipoServicio == TripType.COLECTIVO ||
+                    it.tipoServicio == TripType.COMBI
+        }
+        HistoryFilter.OTROS -> trips.filter {
+            it.tipoServicio == TripType.CHICLAYO_A_CIUDADES ||
+                    it.tipoServicio == TripType.ENVIO_EXPRESS
+        }
     }
 
     Surface(
@@ -104,7 +109,7 @@ fun TripHistoryScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            // Top App Bar (Back, Title, Search, Filter, Avatar as in PDF Page 7)
+            // Clean Top Bar - Perfectly aligned without crowding
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -122,52 +127,39 @@ fun TripHistoryScreen(
                     )
                 }
 
+                Spacer(modifier = Modifier.width(4.dp))
+
                 Text(
-                    text = "Historial De Viajes",
+                    text = "Historial de viajes",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
 
-                IconButton(onClick = { /* Search */ }) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Buscar",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = { /* Calendar Filter */ }) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = "Filtrar por fecha",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                // Total Trips Counter Badge
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(GoldPrimary),
-                    contentAlignment = Alignment.Center
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Perfil",
-                        tint = Color.Black,
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = "${trips.size} viajes",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = GoldPrimary
                     )
                 }
             }
 
-            // Filter Chips Horizontal Scroll
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
+            // Filter Chips (Todos, Viajes en ciudad, Otros servicios)
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                HistoryFilter.entries.forEach { filter ->
+                items(HistoryFilter.entries) { filter ->
                     val isSelected = selectedFilter == filter
                     Row(
                         modifier = Modifier
@@ -177,7 +169,7 @@ fun TripHistoryScreen(
                                 else MaterialTheme.colorScheme.surfaceVariant
                             )
                             .clickable { selectedFilter = filter }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
                             .testTag("history_filter_${filter.name.lowercase()}"),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -185,12 +177,12 @@ fun TripHistoryScreen(
                             imageVector = filter.icon,
                             contentDescription = null,
                             tint = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(5.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = filter.label,
-                            fontSize = 11.5.sp,
+                            fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface
                         )
@@ -198,149 +190,261 @@ fun TripHistoryScreen(
                 }
             }
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Monthly Stats Banner Card (OCTUBRE 2024 - As shown in PDF Page 7)
-                item {
-                    Box(
+            // Main Content Area
+            if (filteredTrips.isEmpty()) {
+                // Empty State: Perfectly squared, centered, balanced in screen
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-                            .padding(14.dp)
+                            .testTag("empty_trip_history_card"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                        )
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(GoldPrimary)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "OCTUBRE 2024",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = GoldPrimary,
-                                        letterSpacing = 0.8.sp
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "24 viajes completados",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "S/ 312.40 invertidos en movilidad urbana",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
+                            // Icon Badge
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(68.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surface),
+                                    .background(GoldPrimary.copy(alpha = 0.15f))
+                                    .border(1.5.dp, GoldPrimary.copy(alpha = 0.4f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                                    imageVector = Icons.Default.DirectionsCar,
                                     contentDescription = null,
                                     tint = GoldPrimary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = if (trips.isEmpty()) "Aún no tienes viajes registrados"
+                                else "Sin viajes en esta categoría",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = if (trips.isEmpty())
+                                    "Tus solicitudes de Taxi Smart, mototaxis o colectivos en Chiclayo se registrarán aquí con sus recibos, conductores y rutas detalladas."
+                                else "No encontramos viajes registrados con el filtro seleccionado.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(18.dp))
+
+                            // Stats Pill (Logical 0 state)
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "0 viajes",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "•", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "★ 0.0 calificación",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = GoldPrimary
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            Button(
+                                onClick = onBackClick,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = GoldPrimary,
+                                    contentColor = Color.Black
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .testTag("request_first_taxi_btn")
+                            ) {
+                                Text(
+                                    text = "Pedir un taxi ahora",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
                                 )
                             }
                         }
                     }
                 }
-
-                // Trip Cards List
-                items(filteredTrips) { trip ->
-                    TripCardItem(
-                        trip = trip,
-                        onClick = { selectedTripDetail = trip }
-                    )
-                }
-
-                // Bottom SUNAT Invoice Card (From PDF Page 7)
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { showInvoiceDownloadedToast = true }
-                            .padding(12.dp)
-                            .testTag("sunat_invoice_card")
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+            } else {
+                // Trip List: Perfectly squared to screen, clean spacing
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Summary Banner
+                    item {
+                        val totalInvertido = filteredTrips.sumOf { it.precio }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                    RoundedCornerShape(14.dp)
+                                )
+                                .padding(14.dp)
                         ) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Description,
-                                    contentDescription = null,
-                                    tint = GoldPrimary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "¿Necesitas factura para SUNAT?",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        text = "${filteredTrips.size} viajes completados",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "Descarga el reporte mensual consolidado",
-                                        fontSize = 11.sp,
+                                        text = "Total: S/ ${String.format("%.2f", totalInvertido)} invertidos en movilidad",
+                                        fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                            }
 
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = "PDF",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        color = GoldPrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surface),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = "Descargar PDF",
+                                        imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                                        contentDescription = null,
                                         tint = GoldPrimary,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
+                                }
+                            }
+                        }
+                    }
+
+                    // Trip Cards
+                    items(filteredTrips) { trip ->
+                        TripCardItem(
+                            trip = trip,
+                            onClick = { selectedTripDetail = trip }
+                        )
+                    }
+
+                    // SUNAT Invoicing card
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { showInvoiceDownloadedToast = true }
+                                .padding(14.dp)
+                                .testTag("sunat_invoice_card")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Description,
+                                        contentDescription = null,
+                                        tint = GoldPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "¿Necesitas factura para SUNAT?",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Descarga el reporte mensual consolidado en PDF",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "PDF",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            color = GoldPrimary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = "Descargar PDF",
+                                            tint = GoldPrimary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -349,7 +453,7 @@ fun TripHistoryScreen(
             }
         }
 
-        // Trip Detail Modal
+        // Trip Detail Dialog
         if (selectedTripDetail != null) {
             val trip = selectedTripDetail!!
             AlertDialog(
@@ -406,7 +510,7 @@ fun TripHistoryScreen(
                                 Icon(Icons.Default.Person, contentDescription = null, tint = GoldPrimary)
                             }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = trip.nombreConductor,
                                     fontWeight = FontWeight.Bold,
@@ -437,7 +541,8 @@ fun TripHistoryScreen(
                                     text = trip.origen,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -453,7 +558,8 @@ fun TripHistoryScreen(
                                     text = trip.destino,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -554,7 +660,10 @@ fun TripCardItem(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        )
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header: Type + Status + Price
@@ -563,13 +672,12 @@ fun TripCardItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(
-                        imageVector = when (trip.tipoServicio) {
-                            TripType.ENVIO_EXPRESS -> Icons.Default.Inventory2
-                            TripType.CHICLAYO_A_CIUDADES -> Icons.Default.Public
-                            else -> Icons.Default.DirectionsCar
-                        },
+                        imageVector = Icons.Default.DirectionsCar,
                         contentDescription = null,
                         tint = GoldPrimary,
                         modifier = Modifier.size(16.dp)
@@ -579,7 +687,9 @@ fun TripCardItem(
                         text = trip.tipoServicio.displayName,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
@@ -596,6 +706,8 @@ fun TripCardItem(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
                     text = "S/ ${String.format("%.2f", trip.precio)}",
@@ -623,20 +735,15 @@ fun TripCardItem(
                         .background(GoldPrimary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = trip.origen,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    if (trip.origenDetalle.isNotBlank()) {
-                        Text(
-                            text = trip.origenDetalle,
-                            fontSize = 10.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
 
@@ -651,20 +758,15 @@ fun TripCardItem(
                         .background(Color(0xFFEF4444))
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = trip.destino,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    if (trip.destinoDetalle.isNotBlank()) {
-                        Text(
-                            text = trip.destinoDetalle,
-                            fontSize = 10.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
 
@@ -679,7 +781,10 @@ fun TripCardItem(
                 Text(
                     text = "${trip.distanciaKm} km • ${trip.duracionMin} min • ${trip.metodoPago}",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Icon(
