@@ -1,0 +1,6 @@
+{
+  "name": "Smart Chiclayo",
+  "description": "Aplicación de movilidad inteligente, taxis, mototaxis, colectivos y transporte público en Chiclayo con gestión de líneas y reportes de incidencias.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
