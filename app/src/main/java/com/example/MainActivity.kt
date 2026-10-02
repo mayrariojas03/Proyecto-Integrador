@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -16,37 +17,48 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+
 import com.example.components.SideMenuDrawer
 import com.example.components.ThemeSelectionDialog
+
+import com.example.data.local.AppDatabase
+import com.example.data.remote.ApiClient
+import com.example.data.repository.SmartChiclayoRepository
+
 import com.example.models.AuthProvider
 import com.example.models.DriverProfile
 import com.example.models.UserRole
+
 import com.example.modules.auth.AuthScreen
 import com.example.modules.auth.LoadingScreen
 import com.example.modules.auth.LoginScreen
 import com.example.modules.auth.OtpVerificationDialog
 import com.example.modules.auth.RegisterScreen
 import com.example.modules.auth.WelcomeScreen
+
 import com.example.modules.driver.DriverPortalScreen
 import com.example.modules.incidents.IncidentReportScreen
 import com.example.modules.manager.ManagerWizardScreen
 import com.example.modules.notifications.NotificationsScreen
+
 import com.example.modules.passenger.HomeScreen
 import com.example.modules.passenger.IntercityScreen
 import com.example.modules.passenger.PublicTransitScreen
 import com.example.modules.passenger.ServicesScreen
 import com.example.modules.passenger.TripHistoryScreen
+
 import com.example.modules.payments.WalletScreen
 import com.example.modules.profile.ProfileScreen
 import com.example.modules.security.SecurityScreen
 import com.example.modules.settings.SettingsScreen
 import com.example.modules.support.SupportScreen
-import com.example.data.local.AppDatabase
-import com.example.data.repository.SmartChiclayoRepository
+
 import com.example.state.AppScreen
 import com.example.state.AuthTab
 import com.example.state.SmartChiclayoViewModel
+
 import com.example.ui.theme.SmartChiclayoTheme
+
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -66,6 +78,30 @@ class MainActivity : ComponentActivity() {
 fun SmartChiclayoApp(viewModel: SmartChiclayoViewModel) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        try {
+            val usuarios = ApiClient.api.listarUsuarios()
+
+            Log.d(
+                "SMART_API",
+                "Conexión exitosa. Usuarios recibidos: ${usuarios.size}"
+            )
+
+            usuarios.forEach { usuario ->
+                Log.d(
+                    "SMART_API",
+                    "${usuario.idUsuario} - ${usuario.nombres} ${usuario.apellidos} - ${usuario.tipoUsuario}"
+                )
+            }
+
+        } catch (e: Exception) {
+            Log.e(
+                "SMART_API",
+                "Error conectando con el backend: ${e.message}",
+                e
+            )
+        }
+    }
 
     // Sync drawer open state with viewModel
     LaunchedEffect(viewModel.isDrawerOpen) {

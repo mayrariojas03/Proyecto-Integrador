@@ -23,6 +23,11 @@ sealed class RegisterResult {
     data class Error(val message: String) : RegisterResult()
 }
 
+sealed class AuthLoginResult {
+    data class Success(val user: User) : AuthLoginResult()
+    data class Error(val message: String) : AuthLoginResult()
+}
+
 class SmartChiclayoRepository(
     private val usuarioDao: UsuarioDao,
     private val viajeDao: ViajeDao
@@ -35,27 +40,35 @@ class SmartChiclayoRepository(
         telefono: String,
         correo: String,
         fechaNacimiento: String,
+        password: String = "",
         authProvider: AuthProvider = AuthProvider.EMAIL
     ): RegisterResult = withContext(Dispatchers.IO) {
-        val cleanPhone = telefono.replace(" ", "").replace("+51", "").trim()
+
+        val cleanPhone = telefono
+            .replace(" ", "")
+            .replace("+51", "")
+            .trim()
+
         val altPhone = "+51 $cleanPhone"
 
-        // 1. Validar que DNI no esté registrado
         if (usuarioDao.countByDocumento(dni) > 0) {
-            return@withContext RegisterResult.Error("El número de documento (DNI) ya se encuentra registrado.")
+            return@withContext RegisterResult.Error(
+                "El número de documento (DNI) ya se encuentra registrado."
+            )
         }
 
-        // 2. Validar que teléfono no esté registrado
         if (usuarioDao.countByTelefono(cleanPhone, altPhone) > 0) {
-            return@withContext RegisterResult.Error("El número de teléfono ya está asociado a otra cuenta.")
+            return@withContext RegisterResult.Error(
+                "El número de teléfono ya está asociado a otra cuenta."
+            )
         }
 
-        // 3. Validar que correo no esté registrado
         if (usuarioDao.countByCorreo(correo.trim()) > 0) {
-            return@withContext RegisterResult.Error("El correo electrónico ya se encuentra registrado.")
+            return@withContext RegisterResult.Error(
+                "El correo electrónico ya se encuentra registrado."
+            )
         }
 
-        // 4. Guardar en tabla usuarios (MySQL schema)
         val usuarioEntity = UsuarioEntity(
             nombres = nombres.trim(),
             apellidos = apellidos.trim(),
@@ -63,16 +76,19 @@ class SmartChiclayoRepository(
             numero_documento = dni.trim(),
             telefono = cleanPhone,
             correo = correo.trim(),
+            password_hash = password,
             tipo_usuario = "PASAJERO",
             estado = "ACTIVO",
             telefono_verificado = true,
             correo_verificado = true,
-            fecha_registro = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+            fecha_registro = java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss",
+                java.util.Locale.getDefault()
+            ).format(java.util.Date())
         )
 
         val newId = usuarioDao.insertUsuario(usuarioEntity)
 
-        // 5. Guardar en perfiles_usuario
         usuarioDao.insertPerfil(
             PerfilUsuarioEntity(
                 id_usuario = newId,
@@ -83,7 +99,6 @@ class SmartChiclayoRepository(
             )
         )
 
-        // 6. Guardar en configuraciones_usuario
         usuarioDao.insertConfiguracion(
             ConfiguracionUsuarioEntity(
                 id_usuario = newId,
@@ -95,7 +110,6 @@ class SmartChiclayoRepository(
             )
         )
 
-        // 7. Guardar en pasajeros (con 0 viajes y 0.0 calificación inicial)
         usuarioDao.insertPasajero(
             PasajeroEntity(
                 id_usuario = newId,
@@ -122,19 +136,93 @@ class SmartChiclayoRepository(
         RegisterResult.Success(domainUser)
     }
 
-    suspend fun findUserByEmail(email: String): User? = withContext(Dispatchers.IO) {
-        val entity = usuarioDao.getUsuarioByCorreo(email.trim()) ?: return@withContext null
-        mapToDomainUser(entity)
+    suspend fun loginWithEmail(
+        email: String,
+        password: String
+    ): AuthLoginResult = withContext(Dispatchers.IO) {
+
+        val usuario = usuarioDao.getUsuarioByCorreo(email.trim())
+            ?: return@withContext AuthLoginResult.Error(
+                "No se encontró una cuenta con este correo electrónico."
+            )
+
+        if (!usuario.password_hash.isNullOrBlank() &&
+            usuario.password_hash != password
+        ) {
+            return@withContext AuthLoginResult.Error(
+                "Contraseña incorrecta."
+            )
+        }
+
+        AuthLoginResult.Success(
+            mapToDomainUser(usuario)
+        )
     }
 
-    suspend fun findUserByPhone(phone: String): User? = withContext(Dispatchers.IO) {
-        val clean = phone.replace(" ", "").replace("+51", "").trim()
-        val alt = "+51 $clean"
-        val entity = usuarioDao.getUsuarioByTelefono(clean, alt) ?: return@withContext null
-        mapToDomainUser(entity)
+    suspend fun loginWithPhone(
+        phone: String,
+        password: String
+    ): AuthLoginResult = withContext(Dispatchers.IO) {
+
+        val cleanPhone = phone
+            .replace(" ", "")
+            .replace("+51", "")
+            .trim()
+
+        val altPhone = "+51 $cleanPhone"
+
+        val usuario = usuarioDao.getUsuarioByTelefono(
+            cleanPhone,
+            altPhone
+        ) ?: return@withContext AuthLoginResult.Error(
+            "No se encontró una cuenta con este número de celular."
+        )
+
+        if (!usuario.password_hash.isNullOrBlank() &&
+            usuario.password_hash != password
+        ) {
+            return@withContext AuthLoginResult.Error(
+                "Contraseña incorrecta."
+            )
+        }
+
+        AuthLoginResult.Success(
+            mapToDomainUser(usuario)
+        )
     }
 
-    suspend fun saveTrip(trip: Trip, userId: Long) = withContext(Dispatchers.IO) {
+    suspend fun findUserByEmail(email: String): User? =
+        withContext(Dispatchers.IO) {
+
+            val entity = usuarioDao.getUsuarioByCorreo(email.trim())
+                ?: return@withContext null
+
+            mapToDomainUser(entity)
+        }
+
+    suspend fun findUserByPhone(phone: String): User? =
+        withContext(Dispatchers.IO) {
+
+            val clean = phone
+                .replace(" ", "")
+                .replace("+51", "")
+                .trim()
+
+            val alt = "+51 $clean"
+
+            val entity = usuarioDao.getUsuarioByTelefono(
+                clean,
+                alt
+            ) ?: return@withContext null
+
+            mapToDomainUser(entity)
+        }
+
+    suspend fun saveTrip(
+        trip: Trip,
+        userId: Long
+    ) = withContext(Dispatchers.IO) {
+
         viajeDao.insertViaje(
             ViajeEntity(
                 codigo_viaje = trip.codigoViaje,
@@ -158,7 +246,9 @@ class SmartChiclayoRepository(
 
     fun getTripsForUser(userId: Long): Flow<List<Trip>> {
         return viajeDao.getViajesByUsuario(userId).map { list ->
+
             list.map { entity ->
+
                 Trip(
                     id = entity.id_viaje.toString(),
                     codigoViaje = entity.codigo_viaje,
@@ -188,9 +278,16 @@ class SmartChiclayoRepository(
         }
     }
 
-    private suspend fun mapToDomainUser(entity: UsuarioEntity): User {
-        val perfil = usuarioDao.getPerfilByUsuarioId(entity.id_usuario)
-        val pasajero = usuarioDao.getPasajeroByUsuarioId(entity.id_usuario)
+    private suspend fun mapToDomainUser(
+        entity: UsuarioEntity
+    ): User {
+
+        val perfil =
+            usuarioDao.getPerfilByUsuarioId(entity.id_usuario)
+
+        val pasajero =
+            usuarioDao.getPasajeroByUsuarioId(entity.id_usuario)
+
         return User(
             id = entity.id_usuario.toString(),
             nombres = entity.nombres,

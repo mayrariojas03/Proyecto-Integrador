@@ -61,25 +61,19 @@ class SmartChiclayoViewModel(
     val repository: SmartChiclayoRepository? = null
 ) : ViewModel() {
 
-    // Current navigation state
     var currentScreen by mutableStateOf(AppScreen.WELCOME)
     val screenStack = mutableStateListOf(AppScreen.WELCOME)
 
-    // Theme state (Claro, Oscuro, Rosa pastel, Verde pastel, Azul pastel)
     var currentTheme by mutableStateOf(AppThemeMode.OSCURO)
     var showThemeDialog by mutableStateOf(false)
 
-    // Auth Tab state (LOGIN or REGISTER)
     var authCurrentTab by mutableStateOf(AuthTab.LOGIN)
 
-    // User accounts state - As requested: NO ACCOUNTS PRE-REGISTERED INITIALLY
     val registeredUsers = mutableStateListOf<User>()
     var currentUser by mutableStateOf<User?>(null)
 
-    // Drawer state
     var isDrawerOpen by mutableStateOf(false)
 
-    // Selected trip service on Home screen
     var selectedServiceType by mutableStateOf(TripType.TAXI_SMART)
     var currentPickupLocation by mutableStateOf("Av. Balta 450 (Chiclayo Centro)")
     var destinationInput by mutableStateOf("")
@@ -87,28 +81,23 @@ class SmartChiclayoViewModel(
     var isSearchingDriver by mutableStateOf(false)
     var activeTrip by mutableStateOf<Trip?>(null)
 
-    // Pre-fill fields for registration when redirected from social/phone auth
     var registerPrefillNombres by mutableStateOf("")
     var registerPrefillApellidos by mutableStateOf("")
     var registerPrefillCorreo by mutableStateOf("")
     var registerPrefillTelefono by mutableStateOf("")
     var registerAuthProvider by mutableStateOf(AuthProvider.EMAIL)
 
-    // OTP verification modal state
     var showOtpDialog by mutableStateOf(false)
     var pendingPhoneNumber by mutableStateOf("")
     var otpCodeInput by mutableStateOf("")
     var otpErrorMsg by mutableStateOf<String?>(null)
 
-    // Wallet balance - Initialized to 0.00 for new users
     var walletBalance by mutableDoubleStateOf(0.00)
     var preferredPaymentType by mutableStateOf(PaymentType.SMARTPAY)
     val transactions = mutableStateListOf<PaymentTransaction>()
 
-    // Trip history list - Initialized empty for new users
     val tripHistory = mutableStateListOf<Trip>()
 
-    // Incidents state
     val incidentsList = mutableStateListOf(
         IncidentReport(
             id = "INC-101",
@@ -123,10 +112,8 @@ class SmartChiclayoViewModel(
         )
     )
 
-    // Notifications - STRICTLY 0 for new users as requested
     val notificationsList = mutableStateListOf<NotificationItem>()
 
-    // Driver mode state
     var driverProfile by mutableStateOf<DriverProfile?>(null)
     var driverStatus by mutableStateOf(DriverStatus.DISPONIBLE)
     var incomingDriverRequest by mutableStateOf<IncomingTripRequest?>(
@@ -143,17 +130,14 @@ class SmartChiclayoViewModel(
         )
     )
 
-    // Manager wizard step (1 to 4)
     var managerStep by mutableIntStateOf(1)
     var isManagerRegistered by mutableStateOf(false)
 
-    // Trusted contacts
     val trustedContacts = mutableStateListOf(
         Pair("Mamá (Rosa)", "974123456"),
         Pair("Hermano (Carlos)", "979654321")
     )
 
-    // Navigation methods
     fun navigateTo(screen: AppScreen) {
         if (currentScreen != screen) {
             screenStack.add(screen)
@@ -171,12 +155,14 @@ class SmartChiclayoViewModel(
         return false
     }
 
-    // Auth actions
     fun handleGoogleAuth(onUserNotFound: () -> Unit, onUserFound: () -> Unit) {
         viewModelScope.launch {
             val email = "mayrariojas03@gmail.com"
             val dbUser = repository?.findUserByEmail(email)
-            val memoryUser = registeredUsers.firstOrNull { it.authProvider == AuthProvider.GOOGLE || it.correo.equals(email, ignoreCase = true) }
+            val memoryUser = registeredUsers.firstOrNull {
+                it.authProvider == AuthProvider.GOOGLE ||
+                        it.correo.equals(email, ignoreCase = true)
+            }
             val existing = dbUser ?: memoryUser
 
             if (existing != null) {
@@ -202,15 +188,28 @@ class SmartChiclayoViewModel(
         showOtpDialog = true
     }
 
-    fun verifyPhoneOtp(code: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun verifyPhoneOtp(
+        code: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
         if (code == "123456" || code.length >= 4) {
             showOtpDialog = false
+
             viewModelScope.launch {
                 val dbUser = repository?.findUserByPhone(pendingPhoneNumber)
-                val cleanPending = pendingPhoneNumber.replace(" ", "").replace("+51", "").trim()
-                val memoryUser = registeredUsers.firstOrNull { 
-                    it.telefono.replace(" ", "").replace("+51", "") == cleanPending 
+
+                val cleanPending = pendingPhoneNumber
+                    .replace(" ", "")
+                    .replace("+51", "")
+                    .trim()
+
+                val memoryUser = registeredUsers.firstOrNull {
+                    it.telefono
+                        .replace(" ", "")
+                        .replace("+51", "") == cleanPending
                 }
+
                 val existing = dbUser ?: memoryUser
 
                 if (existing != null) {
@@ -220,10 +219,13 @@ class SmartChiclayoViewModel(
                     transactions.clear()
                     navigateTo(AppScreen.LOADING)
                 } else {
-                    registerPrefillTelefono = cleanPending.ifBlank { pendingPhoneNumber }
+                    registerPrefillTelefono =
+                        cleanPending.ifBlank { pendingPhoneNumber }
+
                     registerAuthProvider = AuthProvider.PHONE
                     navigateTo(AppScreen.REGISTER)
                 }
+
                 onSuccess()
             }
         } else {
@@ -232,10 +234,19 @@ class SmartChiclayoViewModel(
         }
     }
 
-    fun loginWithGoogleCredentials(email: String, password: String, onResult: (String?) -> Unit) {
+    fun loginWithGoogleCredentials(
+        email: String,
+        password: String,
+        onResult: (String?) -> Unit
+    ) {
         viewModelScope.launch {
             if (repository != null) {
-                when (val result = repository.loginWithEmail(email, password)) {
+                when (
+                    val result = repository.loginWithEmail(
+                        email,
+                        password
+                    )
+                ) {
                     is AuthLoginResult.Success -> {
                         currentUser = result.user
                         walletBalance = 0.00
@@ -245,12 +256,16 @@ class SmartChiclayoViewModel(
                         navigateTo(AppScreen.LOADING)
                         onResult(null)
                     }
+
                     is AuthLoginResult.Error -> {
                         onResult(result.message)
                     }
                 }
             } else {
-                val found = registeredUsers.firstOrNull { it.correo.equals(email.trim(), ignoreCase = true) }
+                val found = registeredUsers.firstOrNull {
+                    it.correo.equals(email.trim(), ignoreCase = true)
+                }
+
                 if (found != null) {
                     currentUser = found
                     walletBalance = 0.00
@@ -260,16 +275,27 @@ class SmartChiclayoViewModel(
                     navigateTo(AppScreen.LOADING)
                     onResult(null)
                 } else {
-                    onResult("No se encontró una cuenta con este correo electrónico.")
+                    onResult(
+                        "No se encontró una cuenta con este correo electrónico."
+                    )
                 }
             }
         }
     }
 
-    fun loginWithPhoneCredentials(phone: String, password: String, onResult: (String?) -> Unit) {
+    fun loginWithPhoneCredentials(
+        phone: String,
+        password: String,
+        onResult: (String?) -> Unit
+    ) {
         viewModelScope.launch {
             if (repository != null) {
-                when (val result = repository.loginWithPhone(phone, password)) {
+                when (
+                    val result = repository.loginWithPhone(
+                        phone,
+                        password
+                    )
+                ) {
                     is AuthLoginResult.Success -> {
                         currentUser = result.user
                         walletBalance = 0.00
@@ -279,15 +305,24 @@ class SmartChiclayoViewModel(
                         navigateTo(AppScreen.LOADING)
                         onResult(null)
                     }
+
                     is AuthLoginResult.Error -> {
                         onResult(result.message)
                     }
                 }
             } else {
-                val clean = phone.replace(" ", "").replace("+51", "").trim()
-                val found = registeredUsers.firstOrNull { 
-                    it.telefono.replace(" ", "").replace("+51", "").trim() == clean 
+                val clean = phone
+                    .replace(" ", "")
+                    .replace("+51", "")
+                    .trim()
+
+                val found = registeredUsers.firstOrNull {
+                    it.telefono
+                        .replace(" ", "")
+                        .replace("+51", "")
+                        .trim() == clean
                 }
+
                 if (found != null) {
                     currentUser = found
                     walletBalance = 0.00
@@ -297,7 +332,9 @@ class SmartChiclayoViewModel(
                     navigateTo(AppScreen.LOADING)
                     onResult(null)
                 } else {
-                    onResult("No se encontró una cuenta con este número de celular.")
+                    onResult(
+                        "No se encontró una cuenta con este número de celular."
+                    )
                 }
             }
         }
@@ -315,16 +352,18 @@ class SmartChiclayoViewModel(
     ) {
         viewModelScope.launch {
             if (repository != null) {
-                when (val result = repository.registerUser(
-                    nombres = nombres,
-                    apellidos = apellidos,
-                    dni = dni,
-                    telefono = telefono,
-                    correo = correo,
-                    fechaNacimiento = fechaNacimiento,
-                    password = password,
-                    authProvider = registerAuthProvider
-                )) {
+                when (
+                    val result = repository.registerUser(
+                        nombres = nombres,
+                        apellidos = apellidos,
+                        dni = dni,
+                        telefono = telefono,
+                        correo = correo,
+                        fechaNacimiento = fechaNacimiento,
+                        password = password,
+                        authProvider = registerAuthProvider
+                    )
+                ) {
                     is RegisterResult.Success -> {
                         registeredUsers.add(result.user)
                         currentUser = result.user
@@ -335,23 +374,30 @@ class SmartChiclayoViewModel(
                         navigateTo(AppScreen.LOADING)
                         onResult(null)
                     }
+
                     is RegisterResult.Error -> {
                         onResult(result.message)
                     }
                 }
             } else {
                 val dniExists = registeredUsers.any { it.dni == dni }
-                val phoneExists = registeredUsers.any { it.telefono == telefono }
-                val emailExists = registeredUsers.any { it.correo.equals(correo, ignoreCase = true) }
+                val phoneExists =
+                    registeredUsers.any { it.telefono == telefono }
+                val emailExists =
+                    registeredUsers.any {
+                        it.correo.equals(correo, ignoreCase = true)
+                    }
 
                 if (dniExists) {
                     onResult("El número de documento ya está registrado.")
                     return@launch
                 }
+
                 if (phoneExists) {
                     onResult("El teléfono ya está registrado.")
                     return@launch
                 }
+
                 if (emailExists) {
                     onResult("El correo ya está registrado.")
                     return@launch
@@ -371,6 +417,7 @@ class SmartChiclayoViewModel(
                     esVip = false,
                     authProvider = registerAuthProvider
                 )
+
                 registeredUsers.add(newUser)
                 currentUser = newUser
                 walletBalance = 0.00
@@ -405,12 +452,17 @@ class SmartChiclayoViewModel(
 
     fun confirmDriverAssigned() {
         isSearchingDriver = false
+
         val newTrip = Trip(
             id = "TRIP-${System.currentTimeMillis() % 10000}",
             codigoViaje = "CHIC-${System.currentTimeMillis() % 10000}",
             tipoServicio = selectedServiceType,
             origen = currentPickupLocation,
-            destino = if (destinationInput.isNotBlank()) destinationInput else "Mall Aventura Chiclayo",
+            destino =
+                if (destinationInput.isNotBlank())
+                    destinationInput
+                else
+                    "Mall Aventura Chiclayo",
             fecha = "Hoy",
             hora = "Ahora",
             precio = userOfferPrice.toDoubleOrNull() ?: 7.00,
@@ -423,10 +475,14 @@ class SmartChiclayoViewModel(
             placaConductor = "M3B-120",
             calificacionConductor = 4.9
         )
+
         activeTrip = newTrip
         tripHistory.add(0, newTrip)
+
         currentUser?.let { user ->
-            currentUser = user.copy(totalViajes = user.totalViajes + 1)
+            currentUser =
+                user.copy(totalViajes = user.totalViajes + 1)
+
             viewModelScope.launch {
                 val uId = user.id.toLongOrNull() ?: 1L
                 repository?.saveTrip(newTrip, uId)
@@ -449,7 +505,8 @@ class SmartChiclayoViewModel(
     ) {
         val newInc = IncidentReport(
             id = "INC-${System.currentTimeMillis() % 10000}",
-            usuarioNombre = currentUser?.nombreCompleto ?: "Mayra Riojas",
+            usuarioNombre =
+                currentUser?.nombreCompleto ?: "Mayra Riojas",
             direccion = direccion,
             tipo = tipo,
             gravedad = gravedad,
@@ -460,6 +517,7 @@ class SmartChiclayoViewModel(
             hora = "Ahora",
             estado = IncidentStatus.ACTIVA
         )
+
         incidentsList.add(0, newInc)
     }
 }
