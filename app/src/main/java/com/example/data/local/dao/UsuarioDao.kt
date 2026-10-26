@@ -18,6 +18,10 @@ interface UsuarioDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertUsuario(usuario: UsuarioEntity): Long
 
+    // Reemplazar y actualizar datos nuevos provenientes de Mysql
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateUsuario(usuario: UsuarioEntity): Long
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPerfil(perfil: PerfilUsuarioEntity): Long
 

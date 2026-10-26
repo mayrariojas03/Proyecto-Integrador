@@ -12,5 +12,6 @@ data class UsuarioResponse(
     val tipoUsuario: String,
     val estado: String,
     val telefonoVerificado: Boolean,
-    val correoVerificado: Boolean
+    val correoVerificado: Boolean,
+    val fechaNacimiento: String? = null
 )

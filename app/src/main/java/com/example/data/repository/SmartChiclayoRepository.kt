@@ -43,29 +43,39 @@ class SmartChiclayoRepository(
         password: String = "",
         authProvider: AuthProvider = AuthProvider.EMAIL
     ): RegisterResult = withContext(Dispatchers.IO) {
-
         val cleanPhone = telefono
             .replace(" ", "")
             .replace("+51", "")
             .trim()
 
-        val altPhone = "+51 $cleanPhone"
+        // 1. PRIMERO: ENVIAR A SPRING BOOT / MYSQL (Persistencia Real)
+        try {
+            val requestRemoto = com.example.data.remote.UsuarioRequest(
+                nombres = nombres.trim(),
+                apellidos = apellidos.trim(),
+                numeroDocumento = dni.trim(),
+                telefono = cleanPhone,
+                correo = correo.trim(),
+                passwordHash = password,
+                tipoUsuario = "PASAJERO",
+                fechaNacimiento = fechaParaMySQL(fechaNacimiento) // <-- ENVÍA LA FECHA A MYSQL
+            )
+            val apiResponse = com.example.data.remote.ApiClient.api.registrarUsuario(requestRemoto)
+            if (!apiResponse.isSuccessful) {
+                val errorBody = apiResponse.errorBody()?.string() ?: ""
+                if (apiResponse.code() == 409 || errorBody.contains("DNI")) {
+                    return@withContext RegisterResult.Error("El número de documento (DNI) ya se encuentra registrado.")
+                }
+            }
+        } catch (e: Exception) {
+            println("Aviso: Conexión remota MySQL no disponible, guardando en caché local: ${e.message}")
+        }
 
+        // 2. SEGUNDO: GUARDAR EN ROOM LOCAL PARA MODO OFFLINE
+        val altPhone = "+51 $cleanPhone"
         if (usuarioDao.countByDocumento(dni) > 0) {
             return@withContext RegisterResult.Error(
                 "El número de documento (DNI) ya se encuentra registrado."
-            )
-        }
-
-        if (usuarioDao.countByTelefono(cleanPhone, altPhone) > 0) {
-            return@withContext RegisterResult.Error(
-                "El número de teléfono ya está asociado a otra cuenta."
-            )
-        }
-
-        if (usuarioDao.countByCorreo(correo.trim()) > 0) {
-            return@withContext RegisterResult.Error(
-                "El correo electrónico ya se encuentra registrado."
             )
         }
 
@@ -86,9 +96,7 @@ class SmartChiclayoRepository(
                 java.util.Locale.getDefault()
             ).format(java.util.Date())
         )
-
         val newId = usuarioDao.insertUsuario(usuarioEntity)
-
         usuarioDao.insertPerfil(
             PerfilUsuarioEntity(
                 id_usuario = newId,
@@ -98,7 +106,6 @@ class SmartChiclayoRepository(
                 departamento = "Lambayeque"
             )
         )
-
         usuarioDao.insertConfiguracion(
             ConfiguracionUsuarioEntity(
                 id_usuario = newId,
@@ -109,7 +116,6 @@ class SmartChiclayoRepository(
                 compartir_ubicacion = true
             )
         )
-
         usuarioDao.insertPasajero(
             PasajeroEntity(
                 id_usuario = newId,
@@ -193,28 +199,21 @@ class SmartChiclayoRepository(
 
     suspend fun findUserByEmail(email: String): User? =
         withContext(Dispatchers.IO) {
-
+            // Sincroniza primero para traer cambios de phpMyAdmin
+            sincronizarUsuariosDesdeMySQL()
             val entity = usuarioDao.getUsuarioByCorreo(email.trim())
                 ?: return@withContext null
-
             mapToDomainUser(entity)
         }
 
     suspend fun findUserByPhone(phone: String): User? =
         withContext(Dispatchers.IO) {
-
-            val clean = phone
-                .replace(" ", "")
-                .replace("+51", "")
-                .trim()
-
+            // Sincroniza primero para traer cambios de phpMyAdmin
+            sincronizarUsuariosDesdeMySQL()
+            val clean = phone.replace(" ", "").replace("+51", "").trim()
             val alt = "+51 $clean"
-
-            val entity = usuarioDao.getUsuarioByTelefono(
-                clean,
-                alt
-            ) ?: return@withContext null
-
+            val entity = usuarioDao.getUsuarioByTelefono(clean, alt)
+                ?: return@withContext null
             mapToDomainUser(entity)
         }
 
@@ -306,5 +305,121 @@ class SmartChiclayoRepository(
             esVip = (pasajero?.total_viajes ?: 0) >= 15,
             authProvider = AuthProvider.EMAIL
         )
+    }
+
+    // SINCRONIZAR: Descarga los cambios de MySQL y actualiza el teléfono
+    suspend fun sincronizarUsuariosDesdeMySQL(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val usuariosRemotos = com.example.data.remote.ApiClient.api.listarUsuarios()
+            for (remoto in usuariosRemotos) {
+                val entity = UsuarioEntity(
+                    id_usuario = remoto.idUsuario,
+                    nombres = remoto.nombres,
+                    apellidos = remoto.apellidos,
+                    tipo_documento = remoto.tipoDocumento ?: "DNI",
+                    numero_documento = remoto.numeroDocumento,
+                    telefono = remoto.telefono,
+                    correo = remoto.correo ?: "",
+                    foto_perfil = remoto.fotoPerfil,
+                    tipo_usuario = remoto.tipoUsuario,
+                    estado = remoto.estado,
+                    telefono_verificado = remoto.telefonoVerificado,
+                    correo_verificado = remoto.correoVerificado
+                )
+                usuarioDao.insertOrUpdateUsuario(entity)
+
+                // Guarda también la fecha de nacimiento en el perfil local:
+                if (!remoto.fechaNacimiento.isNullOrBlank()) {
+                    usuarioDao.insertPerfil(
+                        com.example.data.local.entities.PerfilUsuarioEntity(
+                            id_usuario = remoto.idUsuario,
+                            fecha_nacimiento = fechaParaApp(remoto.fechaNacimiento),
+                            direccion = "Chiclayo Centro",
+                            ciudad = "Chiclayo",
+                            departamento = "Lambayeque"
+                        )
+                    )
+                }
+            }
+            true
+        } catch (e: Exception) {
+            println("Error al sincronizar desde MySQL: ${e.message}")
+            false
+        }
+    }
+
+    // ACTUALIZAR EN MYSQL Y ROOM LOCAL
+    suspend fun actualizarPerfilUsuario(
+        userId: Long,
+        dni: String,
+        telefono: String,
+        correo: String,
+        fechaNacimiento: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // 1. Enviar cambio a MySQL vía Spring Boot
+            val campos = mapOf(
+                "numeroDocumento" to dni.trim(),
+                "telefono" to telefono.trim(),
+                "correo" to correo.trim(),
+                "fechaNacimiento" to fechaParaMySQL(fechaNacimiento) // <-- Convierte a formato MySQL
+            )
+            val response = com.example.data.remote.ApiClient.api.actualizarUsuario(userId, campos)
+
+            // 2. Actualizar también en Room SQLite local
+            val localUser = usuarioDao.getUsuarioById(userId)
+            if (localUser != null) {
+                usuarioDao.insertOrUpdateUsuario(
+                    localUser.copy(
+                        numero_documento = dni.trim(),
+                        telefono = telefono.trim(),
+                        correo = correo.trim()
+                    )
+                )
+                usuarioDao.insertPerfil(
+                    com.example.data.local.entities.PerfilUsuarioEntity(
+                        id_usuario = userId,
+                        fecha_nacimiento = fechaNacimiento.trim(),
+                        direccion = "Chiclayo Centro",
+                        ciudad = "Chiclayo",
+                        departamento = "Lambayeque"
+                    )
+                )
+            }
+            response.isSuccessful
+        } catch (e: Exception) {
+            println("Error al actualizar perfil en MySQL: ${e.message}")
+            false
+        }
+    }
+
+    // Convierte 20/05/1992 (Humano) -> 1992-05-20 (MySQL)
+    private fun fechaParaMySQL(fecha: String): String {
+        val limpia = fecha.trim()
+        if (limpia.contains("/")) {
+            val partes = limpia.split("/")
+            if (partes.size == 3) {
+                val dia = partes[0].padStart(2, '0')
+                val mes = partes[1].padStart(2, '0')
+                val anio = partes[2]
+                return "$anio-$mes-$dia"
+            }
+        }
+        return limpia
+    }
+
+    // Convierte 1992-05-20 (MySQL) -> 20/05/1992 (Para mostrar en la App)
+    private fun fechaParaApp(fecha: String?): String {
+        if (fecha.isNullOrBlank()) return ""
+        if (fecha.contains("-")) {
+            val partes = fecha.split("-")
+            if (partes.size == 3) {
+                val anio = partes[0]
+                val mes = partes[1]
+                val dia = partes[2].take(2)
+                return "$dia/$mes/$anio"
+            }
+        }
+        return fecha
     }
 }

@@ -67,6 +67,7 @@ fun ProfileScreen(
     currentUser: User?,
     onBackClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    onSaveProfile: (dni: String, telefono: String, correo: String, fechaNac: String) -> Unit, // <-- Agrega este parámetro
     modifier: Modifier = Modifier
 ) {
     val user = currentUser ?: User(
@@ -86,6 +87,8 @@ fun ProfileScreen(
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
     var editablePhone by remember { mutableStateOf(user.telefono) }
     var editableEmail by remember { mutableStateOf(user.correo) }
+    var editableDni by remember { mutableStateOf(user.dni) } // <-- Estado para el DNI
+    var editableFechaNac by remember { mutableStateOf(user.fechaNacimiento) } // <-- Estado para la fecha de nacimiento
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -361,6 +364,15 @@ fun ProfileScreen(
                 text = {
                     Column {
                         OutlinedTextField(
+                            value = editableDni,
+                            onValueChange = { editableDni = it },
+                            label = { Text("Número de DNI") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
                             value = editablePhone,
                             onValueChange = { editablePhone = it },
                             label = { Text("Teléfono celular") },
@@ -377,11 +389,23 @@ fun ProfileScreen(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = editableFechaNac,
+                            onValueChange = { editableFechaNac = it },
+                            label = { Text("Fecha de nacimiento (DD/MM/AAAA)") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 },
                 confirmButton = {
                     Button(
-                        onClick = { showEditDialog = false },
+                        onClick = { showEditDialog = false
+                            // Envía los cambios a MySQL
+                            onSaveProfile(editableDni, editablePhone, editableEmail, editableFechaNac)
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary, contentColor = Color.Black)
                     ) {
                         Text("Guardar cambios", fontWeight = FontWeight.Bold)

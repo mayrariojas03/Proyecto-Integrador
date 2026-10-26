@@ -80,26 +80,11 @@ fun SmartChiclayoApp(viewModel: SmartChiclayoViewModel) {
     val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         try {
-            val usuarios = ApiClient.api.listarUsuarios()
-
-            Log.d(
-                "SMART_API",
-                "Conexión exitosa. Usuarios recibidos: ${usuarios.size}"
-            )
-
-            usuarios.forEach { usuario ->
-                Log.d(
-                    "SMART_API",
-                    "${usuario.idUsuario} - ${usuario.nombres} ${usuario.apellidos} - ${usuario.tipoUsuario}"
-                )
-            }
-
+            // Sincroniza con MySQL al iniciar o recargar la app
+            viewModel.sincronizarDatosDesdeServidor()
+            Log.d("SMART_API", "Sincronización con MySQL completada.")
         } catch (e: Exception) {
-            Log.e(
-                "SMART_API",
-                "Error conectando con el backend: ${e.message}",
-                e
-            )
+            Log.e("SMART_API", "Error al sincronizar con el backend: ${e.message}")
         }
     }
 
@@ -293,7 +278,12 @@ fun AppScreenRouter(
                 ProfileScreen(
                     currentUser = viewModel.currentUser,
                     onBackClick = { viewModel.navigateTo(AppScreen.HOME) },
-                    onLogoutClick = { viewModel.logout() }
+                    onLogoutClick = { viewModel.logout() },
+                    onSaveProfile = { dni, phone, email, fechaNac -> viewModel.actualizarPerfilUsuario(nuevoDni = dni,
+                        nuevoTelefono = phone,
+                        nuevoCorreo = email,
+                        nuevaFechaNac = fechaNac)
+                    }
                 )
             }
 

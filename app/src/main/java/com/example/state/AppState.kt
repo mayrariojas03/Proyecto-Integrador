@@ -520,4 +520,55 @@ class SmartChiclayoViewModel(
 
         incidentsList.add(0, newInc)
     }
+
+    // Agrega esta función dentro de SmartChiclayoViewModel:
+    fun sincronizarDatosDesdeServidor() {
+        viewModelScope.launch {
+            if (repository != null) {
+                repository.sincronizarUsuariosDesdeMySQL()
+
+                // Si hay un usuario conectado, refresca sus datos en pantalla
+                val usuarioActual = currentUser
+                if (usuarioActual != null) {
+                    val usuarioActualizado = if (usuarioActual.correo.isNotBlank()) {
+                        repository.findUserByEmail(usuarioActual.correo)
+                    } else {
+                        repository.findUserByPhone(usuarioActual.telefono)
+                    }
+                    if (usuarioActualizado != null) {
+                        currentUser = usuarioActualizado
+                    }
+                }
+            }
+        }
+    }
+
+    fun actualizarPerfilUsuario(nuevoDni: String,
+                                nuevoTelefono: String,
+                                nuevoCorreo: String,
+                                nuevaFechaNac: String) {
+        viewModelScope.launch {
+            val user = currentUser ?: return@launch
+            val userId = user.id.toLongOrNull() ?: return@launch
+
+            if (repository != null) {
+                val ok = repository.actualizarPerfilUsuario(
+                    userId = userId,
+                    dni = nuevoDni,
+                    telefono = nuevoTelefono,
+                    correo = nuevoCorreo,
+                    fechaNacimiento = nuevaFechaNac
+                )
+                if (ok) {
+                    // Refresca el usuario en pantalla de inmediato
+                    currentUser = user.copy(
+                        dni = nuevoDni,
+                        telefono = nuevoTelefono,
+                        correo = nuevoCorreo,
+                        fechaNacimiento = nuevaFechaNac
+                    )
+                }
+            }
+        }
+    }
 }

@@ -40,6 +40,9 @@ public class Usuario {
     @Column(name = "correo_verificado")
     private Boolean correoVerificado;
 
+    @Column(name = "fecha_nacimiento")
+    private String fechaNacimiento;
+
     public Usuario() {
     }
 
@@ -145,5 +148,13 @@ public class Usuario {
 
     public void setCorreoVerificado(Boolean correoVerificado) {
         this.correoVerificado = correoVerificado;
+    }
+
+    public String getFechaNacimiento() {
+        return fechaNacimiento;
+    }
+
+    public void setFechaNacimiento(String fechaNacimiento) {
+        this.fechaNacimiento = fechaNacimiento;
     }
 }
