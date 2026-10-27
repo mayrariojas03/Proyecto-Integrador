@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.repository.AuthLoginResult
 import com.example.data.repository.RegisterResult
 import com.example.data.repository.SmartChiclayoRepository
+import com.example.data.remote.ApiClient
 import kotlinx.coroutines.launch
 import com.example.models.AuthProvider
 import com.example.models.DriverProfile
@@ -20,7 +21,6 @@ import com.example.models.IncidentSeverity
 import com.example.models.IncidentStatus
 import com.example.models.IncidentType
 import com.example.models.IncomingTripRequest
-import com.example.models.NotificationCategory
 import com.example.models.NotificationItem
 import com.example.models.PaymentTransaction
 import com.example.models.PaymentType
@@ -72,6 +72,16 @@ class SmartChiclayoViewModel(
     val registeredUsers = mutableStateListOf<User>()
     var currentUser by mutableStateOf<User?>(null)
 
+    // Estado de guardado para mostrar un aviso desde la interfaz.
+    var guardandoPerfil by mutableStateOf(false)
+        private set
+    var mensajeGuardadoPerfil by mutableStateOf<String?>(null)
+        private set
+
+    fun consumirMensajeGuardadoPerfil() {
+        mensajeGuardadoPerfil = null
+    }
+
     var isDrawerOpen by mutableStateOf(false)
 
     var selectedServiceType by mutableStateOf(TripType.TAXI_SMART)
@@ -98,6 +108,10 @@ class SmartChiclayoViewModel(
 
     val tripHistory = mutableStateListOf<Trip>()
 
+    // Variables para el registro pendiente por verificación de correo
+    var showEmailOtpDialog by mutableStateOf(false)
+    var pendingRegisterEmail by mutableStateOf("")
+    var pendingRegisterData by mutableStateOf<RegisterPendingData?>(null)
     val incidentsList = mutableStateListOf(
         IncidentReport(
             id = "INC-101",
@@ -431,6 +445,9 @@ class SmartChiclayoViewModel(
     }
 
     fun logout() {
+        ApiClient.cerrarSesion()
+        guardandoPerfil = false
+        mensajeGuardadoPerfil = null
         currentUser = null
         walletBalance = 0.00
         tripHistory.clear()
@@ -543,32 +560,157 @@ class SmartChiclayoViewModel(
         }
     }
 
-    fun actualizarPerfilUsuario(nuevoDni: String,
-                                nuevoTelefono: String,
-                                nuevoCorreo: String,
-                                nuevaFechaNac: String) {
-        viewModelScope.launch {
-            val user = currentUser ?: return@launch
-            val userId = user.id.toLongOrNull() ?: return@launch
+    fun actualizarPerfilUsuario(
+        nuevoDni: String,
+        nuevoTelefono: String,
+        nuevoCorreo: String,
+        nuevaFechaNac: String
+    ) {
+        if (guardandoPerfil) return
+        val usuarioInicial = currentUser ?: run {
+            mensajeGuardadoPerfil = "Debes iniciar sesión para editar tu perfil."
+            return
+        }
+        val userId = usuarioInicial.id.toLongOrNull() ?: run {
+            mensajeGuardadoPerfil = "No se pudo identificar tu cuenta en MySQL."
+            return
+        }
+        val repo = repository ?: run {
+            mensajeGuardadoPerfil = "El servicio de perfil no está disponible."
+            return
+        }
 
-            if (repository != null) {
-                val ok = repository.actualizarPerfilUsuario(
+        guardandoPerfil = true
+        mensajeGuardadoPerfil = null
+        viewModelScope.launch {
+            try {
+                val ok = repo.actualizarPerfilUsuario(
                     userId = userId,
                     dni = nuevoDni,
                     telefono = nuevoTelefono,
                     correo = nuevoCorreo,
                     fechaNacimiento = nuevaFechaNac
                 )
+                // No aplicar el resultado si se cerró sesión o cambió la cuenta.
+                if (currentUser?.id != usuarioInicial.id) return@launch
                 if (ok) {
-                    // Refresca el usuario en pantalla de inmediato
-                    currentUser = user.copy(
-                        dni = nuevoDni,
-                        telefono = nuevoTelefono,
-                        correo = nuevoCorreo,
-                        fechaNacimiento = nuevaFechaNac
+                    currentUser = currentUser?.copy(
+                        dni = nuevoDni.trim(),
+                        telefono = nuevoTelefono.trim(),
+                        correo = nuevoCorreo.trim(),
+                        fechaNacimiento = nuevaFechaNac.trim()
                     )
+                    mensajeGuardadoPerfil = "Perfil guardado correctamente."
+                } else {
+                    mensajeGuardadoPerfil = "No se pudieron guardar los cambios. Revisa la conexión o vuelve a iniciar sesión."
+                }
+            } catch (e: Exception) {
+                if (currentUser?.id == usuarioInicial.id) {
+                    android.util.Log.e("PERFIL_API", "Error al guardar perfil", e)
+                    mensajeGuardadoPerfil = "Ocurrió un error al guardar tu perfil."
+                }
+            } finally {
+                guardandoPerfil = false
+            }
+        }
+    }
+
+    // Solicita el código al backend y abre el diálogo
+    fun iniciarRegistroConVerificacionCorreo(
+        nombres: String,
+        apellidos: String,
+        dni: String,
+        telefono: String,
+        correo: String,
+        fechaNac: String,
+        password: String,
+        onResult: (String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                // Guarda temporalmente los datos
+                pendingRegisterEmail = correo.trim()
+                pendingRegisterData = RegisterPendingData(nombres, apellidos, dni, telefono, correo, fechaNac, password, onResult)
+
+                // Solicita el código a Spring Boot
+                ApiClient.api.enviarCodigoCorreo(mapOf("correo" to correo.trim()))
+
+                // Muestra la ventana para ingresar el código
+                showEmailOtpDialog = true
+            } catch (e: Exception) {
+                onResult("No se pudo enviar el correo de verificación: ${e.message}")
+            }
+        }
+    }
+
+    // Valida el código y si es correcto, registra en MySQL
+    fun confirmarCodigoCorreoYRegistrar(
+        codigo: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val resp = ApiClient.api.verificarCodigoCorreo(
+                    mapOf("correo" to pendingRegisterEmail, "codigo" to codigo.trim())
+                )
+                if (resp.isSuccessful) {
+                    showEmailOtpDialog = false
+                    val data = pendingRegisterData
+                    if (data != null) {
+                        registerNewUser(
+                            nombres = data.nombres,
+                            apellidos = data.apellidos,
+                            dni = data.dni,
+                            telefono = data.telefono,
+                            correo = data.correo,
+                            fechaNacimiento = data.fechaNac,
+                            password = data.password,
+                            onResult = data.onResult
+                        )
+                    }
+                    onSuccess()
+                } else {
+                    onError("Código incorrecto. Revisa tu correo.")
+                }
+            } catch (e: Exception) {
+                onError("Error de conexión: ${e.message}")
+            }
+        }
+    }
+
+    fun iniciarSesionConCuentaGoogle(emailGoogle: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            if (repository != null) {
+                // 1. Sincroniza primero con MySQL
+                repository.sincronizarUsuariosDesdeMySQL()
+
+                // 2. Busca al usuario en la base de datos por su correo de Google
+                val user = repository.findUserByEmail(emailGoogle.trim())
+
+                if (user != null) {
+                    // ¡Encontrado! Inicia sesión de inmediato
+                    currentUser = user
+                    walletBalance = 0.00
+                    tripHistory.clear()
+                    navigateTo(AppScreen.LOADING)
+                    onResult(null)
+                } else {
+                    // Si no está registrado en MySQL, le avisa para que se registre primero
+                    onResult("El correo de Google ($emailGoogle) no está registrado. Regístrate primero.")
                 }
             }
         }
     }
+
+    data class RegisterPendingData(
+        val nombres: String,
+        val apellidos: String,
+        val dni: String,
+        val telefono: String,
+        val correo: String,
+        val fechaNac: String,
+        val password: String,
+        val onResult: (String?) -> Unit
+    )
 }

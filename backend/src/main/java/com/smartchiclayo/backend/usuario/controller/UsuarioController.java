@@ -2,8 +2,13 @@ package com.smartchiclayo.backend.usuario.controller;
 
 import com.smartchiclayo.backend.usuario.entity.Usuario;
 import com.smartchiclayo.backend.usuario.repository.UsuarioRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -17,6 +22,12 @@ import java.util.Optional;
 public class UsuarioController {
 
     private final UsuarioRepository usuarioRepository;
+
+    @Autowired(required = false)
+    private JavaMailSender mailSender;
+
+    // Almacena temporalmente los códigos generados: correo -> codigo
+    private static final Map<String, String> codigosVerificacion = new HashMap<>();
 
     public UsuarioController(UsuarioRepository usuarioRepository) {
         this.usuarioRepository = usuarioRepository;
@@ -84,7 +95,8 @@ public class UsuarioController {
         }
 
         Usuario usuario = usuarioOpt.get();
-        if (usuario.getPasswordHash() != null && !usuario.getPasswordHash().equals(password)) {
+        if (password == null || usuario.getPasswordHash() == null || usuario.getPasswordHash().isBlank()
+                || !usuario.getPasswordHash().equals(password)) {
             response.put("success", false);
             response.put("message", "Contraseña incorrecta.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
@@ -98,8 +110,20 @@ public class UsuarioController {
 
     // ACTUALIZAR PERFIL EN MYSQL: Se invoca al editar desde la app
     @PutMapping("/{id}")
-    public ResponseEntity<?> actualizarUsuario(@PathVariable Long id, @RequestBody Map<String, Object> campos) {
+    public ResponseEntity<?> actualizarUsuario(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> campos,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
         Map<String, Object> response = new HashMap<>();
+
+        // El subject del JWT es el id del usuario autenticado en MySQL.
+        if (jwt == null || !id.toString().equals(jwt.getSubject())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "success", false,
+                    "message", "No tienes permiso para modificar este perfil."
+            ));
+        }
 
         Optional<Usuario> usuarioOpt = usuarioRepository.findById(id);
         if (usuarioOpt.isEmpty()) {
@@ -134,7 +158,72 @@ public class UsuarioController {
 
         response.put("success", true);
         response.put("message", "Usuario actualizado exitosamente en MySQL");
-        response.put("usuario", usuarioActualizado);
+        // Nunca devolver la entidad completa: contiene passwordHash y googleSub.
+        response.put("usuario", Map.of(
+                "idUsuario", usuarioActualizado.getIdUsuario(),
+                "nombres", usuarioActualizado.getNombres() == null ? "" : usuarioActualizado.getNombres(),
+                "apellidos", usuarioActualizado.getApellidos() == null ? "" : usuarioActualizado.getApellidos(),
+                "correo", usuarioActualizado.getCorreo() == null ? "" : usuarioActualizado.getCorreo(),
+                "tipoUsuario", usuarioActualizado.getTipoUsuario() == null ? "" : usuarioActualizado.getTipoUsuario()
+        ));
         return ResponseEntity.ok(response);
+    }
+
+    // 1. ENDPOINT PARA ENVIAR EL CÓDIGO AL CORREO
+    @PostMapping("/enviar-codigo-correo")
+    public ResponseEntity<?> enviarCodigoCorreo(@RequestBody Map<String, String> body) {
+        String correo = body.get("correo");
+        if (correo == null || correo.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "El correo es requerido"));
+        }
+
+        // Genera código aleatorio de 6 dígitos
+        String codigo = String.format("%06d", new java.util.Random().nextInt(999999));
+        codigosVerificacion.put(correo.trim().toLowerCase(), codigo);
+
+        System.out.println("================================================");
+        System.out.println(">>> CÓDIGO DE VERIFICACIÓN PARA [" + correo + "]: " + codigo);
+        System.out.println("================================================");
+
+        // Intenta enviar el correo real si mailSender está configurado
+        try {
+            if (mailSender != null) {
+                SimpleMailMessage mensaje = new SimpleMailMessage();
+                mensaje.setTo(correo.trim());
+                mensaje.setSubject("Código de Verificación - Smart Chiclayo");
+                mensaje.setText("Hola,\n\nTu código de verificación para completar tu registro en Smart Chiclayo es: "
+                        + codigo + "\n\nEste código es personal e intransferible.");
+                mailSender.send(mensaje);
+            }
+        } catch (Exception e) {
+            System.err.println("Aviso al enviar correo: " + e.getMessage());
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Código de verificación enviado al correo."
+        ));
+    }
+
+    // 2. ENDPOINT PARA VERIFICAR EL CÓDIGO
+    @PostMapping("/verificar-codigo-correo")
+    public ResponseEntity<?> verificarCodigoCorreo(@RequestBody Map<String, String> body) {
+        String correo = body.get("correo");
+        String codigo = body.get("codigo");
+
+        if (correo == null || correo.isBlank() || codigo == null || codigo.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Correo y código requeridos"));
+        }
+        String codigoEsperado = codigosVerificacion.get(correo.trim().toLowerCase());
+
+        if (codigoEsperado != null && codigoEsperado.equals(codigo.trim())) {
+            codigosVerificacion.remove(correo.trim().toLowerCase());
+            return ResponseEntity.ok(Map.of("success", true, "message", "Código verificado correctamente"));
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                "success", false,
+                "message", "El código ingresado es incorrecto o ha expirado."
+        ));
     }
 }

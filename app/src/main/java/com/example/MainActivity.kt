@@ -1,3 +1,5 @@
+@file:JvmName("MainActivityKt")
+
 package com.example
 
 import android.os.Bundle
@@ -14,26 +16,25 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 import com.example.components.SideMenuDrawer
 import com.example.components.ThemeSelectionDialog
 
 import com.example.data.local.AppDatabase
-import com.example.data.remote.ApiClient
+import com.example.data.remote.GoogleAuthRequest
 import com.example.data.repository.SmartChiclayoRepository
 
-import com.example.models.AuthProvider
 import com.example.models.DriverProfile
+import com.example.models.User
 import com.example.models.UserRole
+import com.example.models.AuthProvider
 
 import com.example.modules.auth.AuthScreen
 import com.example.modules.auth.LoadingScreen
-import com.example.modules.auth.LoginScreen
 import com.example.modules.auth.OtpVerificationDialog
-import com.example.modules.auth.RegisterScreen
 import com.example.modules.auth.WelcomeScreen
 
 import com.example.modules.driver.DriverPortalScreen
@@ -61,6 +62,13 @@ import com.example.ui.theme.SmartChiclayoTheme
 
 import kotlinx.coroutines.launch
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
+import com.example.data.remote.ApiClient
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +86,115 @@ class MainActivity : ComponentActivity() {
 fun SmartChiclayoApp(viewModel: SmartChiclayoViewModel) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Solicita un ID token cuya audiencia es el cliente OAuth Web.
+    val gso = remember(context) {
+        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestIdToken(context.getString(R.string.google_web_client_id))
+            .build()
+    }
+    val googleSignInClient = remember(context, gso) {
+        GoogleSignIn.getClient(context, gso)
+    }
+
+    val cerrarSesion: () -> Unit = {
+        ApiClient.cerrarSesion()
+        viewModel.logout()
+    }
+
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        try {
+            val account = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                .getResult(com.google.android.gms.common.api.ApiException::class.java)
+            val idToken = account.idToken
+
+            if (idToken.isNullOrBlank()) {
+                Log.e("GOOGLE_AUTH", "Google no entregó un ID token")
+                Toast.makeText(context, "No se obtuvo el token de Google", Toast.LENGTH_LONG).show()
+            } else {
+                coroutineScope.launch {
+                    try {
+                        val response = ApiClient.api.autenticarConGoogle(
+                            GoogleAuthRequest(idToken = idToken)
+                        )
+                        val body = response.body()
+                        if (response.isSuccessful && body?.success == true) {
+                            val token = body.accessToken
+                            val usuario = body.usuario
+                            if (token.isNullOrBlank() || usuario == null ||
+                                !body.tokenType.equals("Bearer", ignoreCase = true) ||
+                                body.expiresIn <= 0L
+                            ) {
+                                Log.e("GOOGLE_AUTH", "El backend no devolvio una sesion completa")
+                                Toast.makeText(
+                                    context,
+                                    "No se pudo iniciar la sesion. Intenta nuevamente",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                ApiClient.establecerToken(token)
+                                viewModel.currentUser = User(
+                                    id = usuario.idUsuario.toString(),
+                                    nombres = usuario.nombres,
+                                    apellidos = usuario.apellidos,
+                                    dni = "",
+                                    telefono = "",
+                                    correo = usuario.correo,
+                                    rol = when (usuario.tipoUsuario.uppercase()) {
+                                        "CONDUCTOR" -> UserRole.CONDUCTOR
+                                        "GESTOR_LINEA" -> UserRole.GESTOR_LINEA
+                                        else -> UserRole.PASAJERO
+                                    },
+                                    authProvider = AuthProvider.GOOGLE
+                                )
+                                viewModel.navigateTo(AppScreen.LOADING)
+                                Toast.makeText(
+                                    context,
+                                    "Sesion iniciada con Google",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } else {
+                            val mensaje = when (response.code()) {
+                                409 -> "El correo ya pertenece a una cuenta existente"
+                                401 -> "Google no pudo validar la cuenta"
+                                503 -> "No se pudo verificar Google. Intenta de nuevo"
+                                else -> "Error del backend (${response.code()})"
+                            }
+                            Log.e("GOOGLE_AUTH", mensaje)
+                            Toast.makeText(context, mensaje, Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("GOOGLE_AUTH", "Error al comunicarse con Spring Boot", e)
+                        Toast.makeText(
+                            context,
+                            "No se pudo conectar con el backend",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        } catch (e: com.google.android.gms.common.api.ApiException) {
+            Log.e("GOOGLE_AUTH", "Google Sign-In falló: ${e.statusCode}", e)
+            Toast.makeText(
+                context,
+                "Error de Google Sign-In: ${e.statusCode}",
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (e: Exception) {
+            Log.e("GOOGLE_AUTH", "Error inesperado de Google Sign-In", e)
+            Toast.makeText(
+                context,
+                "Error inesperado durante el inicio de sesión",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     LaunchedEffect(Unit) {
         try {
             // Sincroniza con MySQL al iniciar o recargar la app
@@ -85,6 +202,15 @@ fun SmartChiclayoApp(viewModel: SmartChiclayoViewModel) {
             Log.d("SMART_API", "Sincronización con MySQL completada.")
         } catch (e: Exception) {
             Log.e("SMART_API", "Error al sincronizar con el backend: ${e.message}")
+        }
+    }
+
+    // Mostrar una sola vez el resultado de guardar el perfil.
+    LaunchedEffect(viewModel.mensajeGuardadoPerfil) {
+        val mensaje = viewModel.mensajeGuardadoPerfil
+        if (!mensaje.isNullOrBlank()) {
+            Toast.makeText(context, mensaje, Toast.LENGTH_LONG).show()
+            viewModel.consumirMensajeGuardadoPerfil()
         }
     }
 
@@ -143,6 +269,12 @@ fun SmartChiclayoApp(viewModel: SmartChiclayoViewModel) {
                     viewModel = viewModel,
                     onOpenMenu = {
                         coroutineScope.launch { drawerState.open() }
+                    },
+                    onLogout = cerrarSesion,
+                    onGoogleLoginClick = {
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            googleLauncher.launch(googleSignInClient.signInIntent)
+                        }
                     }
                 )
             }
@@ -151,6 +283,12 @@ fun SmartChiclayoApp(viewModel: SmartChiclayoViewModel) {
                 viewModel = viewModel,
                 onOpenMenu = {
                     coroutineScope.launch { drawerState.open() }
+                },
+                onLogout = cerrarSesion,
+                onGoogleLoginClick = {
+                    googleSignInClient.signOut().addOnCompleteListener {
+                        googleLauncher.launch(googleSignInClient.signInIntent)
+                    }
                 }
             )
         }
@@ -178,13 +316,34 @@ fun SmartChiclayoApp(viewModel: SmartChiclayoViewModel) {
                 onDismiss = { viewModel.showOtpDialog = false }
             )
         }
+
+        // Diálogo emergente para el código de verificación por correo
+        if (viewModel.showEmailOtpDialog) {
+            com.example.modules.auth.OtpVerificationDialog(
+                phoneNumber = "Correo: " + viewModel.pendingRegisterEmail,
+                onVerifyCode = { codigo ->
+                    viewModel.confirmarCodigoCorreoYRegistrar(
+                        codigo = codigo,
+                        onSuccess = {
+                            Toast.makeText(context, "¡Correo verificado con éxito!", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { err ->
+                            Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                },
+                onDismiss = { viewModel.showEmailOtpDialog = false }
+            )
+        }
     }
 }
 
 @Composable
 fun AppScreenRouter(
     viewModel: SmartChiclayoViewModel,
-    onOpenMenu: () -> Unit
+    onOpenMenu: () -> Unit,
+    onLogout: () -> Unit,
+    onGoogleLoginClick: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (viewModel.currentScreen) {
@@ -205,6 +364,7 @@ fun AppScreenRouter(
                 AuthScreen(
                     currentTab = viewModel.authCurrentTab,
                     onTabChange = { newTab -> viewModel.authCurrentTab = newTab },
+                    onGoogleLoginClick = onGoogleLoginClick,
                     onLoginWithGoogle = { email, password, onResult ->
                         viewModel.loginWithGoogleCredentials(email, password, onResult)
                     },
@@ -278,7 +438,7 @@ fun AppScreenRouter(
                 ProfileScreen(
                     currentUser = viewModel.currentUser,
                     onBackClick = { viewModel.navigateTo(AppScreen.HOME) },
-                    onLogoutClick = { viewModel.logout() },
+                    onLogoutClick = onLogout,
                     onSaveProfile = { dni, phone, email, fechaNac -> viewModel.actualizarPerfilUsuario(nuevoDni = dni,
                         nuevoTelefono = phone,
                         nuevoCorreo = email,
@@ -380,7 +540,7 @@ fun AppScreenRouter(
                     currentUser = viewModel.currentUser,
                     currentTheme = viewModel.currentTheme,
                     onThemeSelect = { viewModel.currentTheme = it },
-                    onLogoutClick = { viewModel.logout() },
+                    onLogoutClick = onLogout,
                     onBackClick = { viewModel.navigateTo(AppScreen.HOME) }
                 )
             }

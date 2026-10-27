@@ -43,6 +43,9 @@ public class Usuario {
     @Column(name = "fecha_nacimiento")
     private String fechaNacimiento;
 
+    @Column(name = "google_sub", unique = true, length = 255)
+    private String googleSub;
+
     public Usuario() {
     }
 
@@ -156,5 +159,13 @@ public class Usuario {
 
     public void setFechaNacimiento(String fechaNacimiento) {
         this.fechaNacimiento = fechaNacimiento;
+    }
+
+    public String getGoogleSub() {
+        return googleSub;
+    }
+
+    public void setGoogleSub(String googleSub) {
+        this.googleSub = googleSub;
     }
 }

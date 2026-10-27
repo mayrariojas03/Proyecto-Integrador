@@ -152,7 +152,7 @@ class SmartChiclayoRepository(
                 "No se encontró una cuenta con este correo electrónico."
             )
 
-        if (!usuario.password_hash.isNullOrBlank() &&
+        if (usuario.password_hash.isNullOrBlank() ||
             usuario.password_hash != password
         ) {
             return@withContext AuthLoginResult.Error(
@@ -184,7 +184,7 @@ class SmartChiclayoRepository(
             "No se encontró una cuenta con este número de celular."
         )
 
-        if (!usuario.password_hash.isNullOrBlank() &&
+        if (usuario.password_hash.isNullOrBlank() ||
             usuario.password_hash != password
         ) {
             return@withContext AuthLoginResult.Error(
@@ -348,7 +348,7 @@ class SmartChiclayoRepository(
         }
     }
 
-    // ACTUALIZAR EN MYSQL Y ROOM LOCAL
+    // ACTUALIZAR EN MYSQL Y, SOLO SI EL SERVIDOR CONFIRMA, EN ROOM LOCAL
     suspend fun actualizarPerfilUsuario(
         userId: Long,
         dni: String,
@@ -357,38 +357,53 @@ class SmartChiclayoRepository(
         fechaNacimiento: String
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            // 1. Enviar cambio a MySQL vía Spring Boot
             val campos = mapOf(
                 "numeroDocumento" to dni.trim(),
                 "telefono" to telefono.trim(),
                 "correo" to correo.trim(),
-                "fechaNacimiento" to fechaParaMySQL(fechaNacimiento) // <-- Convierte a formato MySQL
+                "fechaNacimiento" to fechaParaMySQL(fechaNacimiento)
             )
             val response = com.example.data.remote.ApiClient.api.actualizarUsuario(userId, campos)
-
-            // 2. Actualizar también en Room SQLite local
-            val localUser = usuarioDao.getUsuarioById(userId)
-            if (localUser != null) {
-                usuarioDao.insertOrUpdateUsuario(
-                    localUser.copy(
-                        numero_documento = dni.trim(),
-                        telefono = telefono.trim(),
-                        correo = correo.trim()
-                    )
+            if (!response.isSuccessful) {
+                android.util.Log.e(
+                    "PERFIL_API",
+                    "El backend rechazó la actualización. HTTP ${response.code()}"
                 )
-                usuarioDao.insertPerfil(
-                    com.example.data.local.entities.PerfilUsuarioEntity(
-                        id_usuario = userId,
-                        fecha_nacimiento = fechaNacimiento.trim(),
-                        direccion = "Chiclayo Centro",
-                        ciudad = "Chiclayo",
-                        departamento = "Lambayeque"
+                return@withContext false
+            }
+
+            // La actualización remota ya fue confirmada. Room es una caché opcional.
+            try {
+                val localUser = usuarioDao.getUsuarioById(userId)
+                if (localUser != null) {
+                    usuarioDao.insertOrUpdateUsuario(
+                        localUser.copy(
+                            numero_documento = dni.trim(),
+                            telefono = telefono.trim(),
+                            correo = correo.trim()
+                        )
                     )
+                    usuarioDao.insertPerfil(
+                        PerfilUsuarioEntity(
+                            id_usuario = userId,
+                            fecha_nacimiento = fechaNacimiento.trim(),
+                            direccion = "Chiclayo Centro",
+                            ciudad = "Chiclayo",
+                            departamento = "Lambayeque"
+                        )
+                    )
+                }
+            } catch (localError: Exception) {
+                // No informar fallo remoto si MySQL sí guardó los cambios.
+                android.util.Log.w(
+                    "PERFIL_API",
+                    "MySQL guardó el perfil, pero Room no pudo actualizar su caché",
+                    localError
                 )
             }
-            response.isSuccessful
+            true
         } catch (e: Exception) {
-            println("Error al actualizar perfil en MySQL: ${e.message}")
+            android.util.Log.e("PERFIL_API", "No se pudo actualizar el perfil", e)
             false
         }
     }
