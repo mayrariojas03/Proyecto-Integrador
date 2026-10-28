@@ -365,9 +365,25 @@ class SmartChiclayoRepository(
             )
             val response = com.example.data.remote.ApiClient.api.actualizarUsuario(userId, campos)
             if (!response.isSuccessful) {
+                // Registrar solo el mensaje público del backend, nunca el cuerpo completo:
+                // podría contener datos personales o información interna.
+                val mensajeServidor = try {
+                    val errorJson = response.errorBody()?.string().orEmpty()
+                    if (errorJson.isBlank()) {
+                        "Sin mensaje de error en la respuesta"
+                    } else {
+                        org.json.JSONObject(errorJson)
+                            .optString("message", "Sin mensaje de error identificable")
+                            .take(200)
+                    }
+                } catch (_: Exception) {
+                    "No se pudo interpretar el mensaje del backend"
+                }
+
                 android.util.Log.e(
                     "PERFIL_API",
-                    "El backend rechazó la actualización. HTTP ${response.code()}"
+                    "Actualización rechazada. ID solicitado: $userId; " +
+                        "HTTP ${response.code()}; mensaje: $mensajeServidor"
                 )
                 return@withContext false
             }

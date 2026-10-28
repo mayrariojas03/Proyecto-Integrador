@@ -115,6 +115,14 @@ public class UsuarioController {
             @RequestBody Map<String, Object> campos,
             @AuthenticationPrincipal Jwt jwt
     ) {
+        // DIAGNÓSTICO TEMPORAL DEL ERROR HTTP 403
+        System.out.println("PERFIL_DEBUG: La solicitud PUT llegó al controlador. ID solicitado: " + id);
+
+        System.out.println("PERFIL_DEBUG: JWT presente: " + (jwt != null));
+
+        System.out.println("PERFIL_DEBUG: Coincide el ID con el JWT: " +
+                (jwt != null && id.toString().equals(jwt.getSubject())));
+
         Map<String, Object> response = new HashMap<>();
 
         // El subject del JWT es el id del usuario autenticado en MySQL.
@@ -166,6 +174,9 @@ public class UsuarioController {
                 "correo", usuarioActualizado.getCorreo() == null ? "" : usuarioActualizado.getCorreo(),
                 "tipoUsuario", usuarioActualizado.getTipoUsuario() == null ? "" : usuarioActualizado.getTipoUsuario()
         ));
+
+        System.out.println("PERFIL_DEBUG: El controlador terminó correctamente y devolverá HTTP 200");
+
         return ResponseEntity.ok(response);
     }
 
