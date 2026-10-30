@@ -1,3 +1,4 @@
+
 package com.smartchiclayo.backend.config;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -31,35 +32,100 @@ public class SecurityConfig {
             @Value("${app.jwt.keystore-password}") String keyStorePassword,
             @Value("${app.jwt.issuer}") String issuer
     ) throws Exception {
+
         Resource resource = resourceLoader.getResource(
-                keyStorePath.contains(":") ? keyStorePath : "file:" + keyStorePath
+                keyStorePath.contains(":")
+                        ? keyStorePath
+                        : "file:" + keyStorePath
         );
+
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
+
         try (InputStream input = resource.getInputStream()) {
             keyStore.load(input, keyStorePassword.toCharArray());
         }
+
         Certificate certificate = keyStore.getCertificate(keyAlias);
-        if (certificate == null || !(certificate.getPublicKey() instanceof RSAPublicKey publicKey)) {
-            throw new IllegalStateException("El alias JWT no contiene un certificado RSA valido");
+
+        if (certificate == null
+                || !(certificate.getPublicKey() instanceof RSAPublicKey publicKey)) {
+            throw new IllegalStateException(
+                    "El alias JWT no contiene un certificado RSA valido"
+            );
         }
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
-        OAuth2TokenValidator<Jwt> validator = JwtValidators.createDefaultWithIssuer(issuer);
+
+        NimbusJwtDecoder decoder =
+                NimbusJwtDecoder.withPublicKey(publicKey).build();
+
+        OAuth2TokenValidator<Jwt> validator =
+                JwtValidators.createDefaultWithIssuer(issuer);
+
         decoder.setJwtValidator(validator);
+
         return decoder;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
+
         http
                 .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
+
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/auth/google").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/usuarios/*").authenticated()
-                        // No abrir otros endpoints hasta revisar permisos por usuario.
+
+                        // Autenticacion con Google.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/google"
+                        ).permitAll()
+
+                        // Registro tradicional.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/usuarios/registro"
+                        ).permitAll()
+
+                        // Inicio de sesion tradicional.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/usuarios/login"
+                        ).permitAll()
+
+                        // Solicitar codigo de verificacion.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/usuarios/enviar-codigo-correo"
+                        ).permitAll()
+
+                        // Validar codigo de verificacion.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/usuarios/verificar-codigo-correo"
+                        ).permitAll()
+
+                        // Actualizacion de perfil protegida con JWT.
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/usuarios/*"
+                        ).authenticated()
+
+                        // Los demas endpoints permanecen bloqueados.
                         .anyRequest().denyAll()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
+
+                .oauth2ResourceServer(oauth2 ->
+                        oauth2.jwt(jwt -> {})
+                );
+
         return http.build();
     }
 }
+
